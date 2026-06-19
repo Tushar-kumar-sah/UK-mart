@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const today = new Date();
@@ -76,7 +79,6 @@ export async function GET() {
       })),
     };
 
-    // Add cache control headers to prevent stale data
     return NextResponse.json(response, {
       headers: {
         'Cache-Control': 'no-store, max-age=0, must-revalidate',
