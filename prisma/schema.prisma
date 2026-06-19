@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  
+}
+
+model User {
+  id             String   @id @default(uuid())
+  name           String
+  email          String   @unique
+  googleId       String?  @unique
+  avatar         String?
+  phone          String?
+  role           String   @default("USER")
+  address        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  orders         Order[]
+}
+
+model Category {
+  id                   String    @id @default(uuid())
+  name                 String
+  nameHi               String   @default("")
+  nameBn               String   @default("")
+  image                String?
+  parentId             String?
+  parent               Category? @relation("CategoryTree", fields: [parentId], references: [id])
+  children             Category[] @relation("CategoryTree")
+  isActive             Boolean   @default(true)
+  sortOrder            Int       @default(0)
+  productsAsCategory   Product[] @relation("ProductCategory")
+  productsAsSubcategory Product[] @relation("ProductSubcategory")
+  createdAt            DateTime  @default(now())
+}
+
+model Product {
+  id              String    @id @default(uuid())
+  name            String
+  nameHi          String    @default("")
+  nameBn          String    @default("")
+  description     String    @default("")
+  descriptionHi   String    @default("")
+  descriptionBn   String    @default("")
+  categoryId      String
+  subcategoryId   String?
+  category        Category  @relation("ProductCategory", fields: [categoryId], references: [id])
+  subcategory     Category? @relation("ProductSubcategory", fields: [subcategoryId], references: [id])
+  basePrice       Float
+  baseUnit        String    @default("1kg")
+  availableUnits  String    @default("[\"100g\",\"250g\",\"500g\",\"1kg\",\"2kg\",\"5kg\"]")
+  imageUrl        String?
+  isActive        Boolean   @default(true)
+  stock           Float     @default(0)
+  unitType        String    @default("weight")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  orderItems      OrderItem[]
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  totalAmount     Float
+  discountAmount  Float       @default(0)
+  finalAmount     Float
+  status          String      @default("PENDING")
+  paymentMethod   String      @default("UPI")
+  paymentStatus   String      @default("PENDING")
+  customerName    String
+  customerPhone   String
+  pincode         String?
+  deliveryAddress String
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model OrderItem {
+  id           String  @id @default(uuid())
+  orderId      String
+  order        Order   @relation(fields: [orderId], references: [id])
+  productId    String
+  product      Product @relation(fields: [productId], references: [id])
+  productName  String
+  quantity     Float
+  unit         String
+  pricePerUnit Float
+  totalPrice   Float
+}
+
+model Offer {
+  id             String    @id @default(uuid())
+  name           String
+  description    String    @default("")
+  discountType   String    @default("PERCENTAGE")
+  discountValue  Float
+  minOrderAmount Float     @default(0)
+  maxDiscount    Float?
+  isActive       Boolean   @default(true)
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime  @default(now())
+}
