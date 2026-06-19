@@ -683,7 +683,7 @@ export default function StoreFront() {
         {/* ============ HERO ============ */}
         <section
           className="relative w-full bg-cover bg-center bg-no-repeat bg-[#D7CCC8] min-h-56 sm:min-h-72 md:min-h-96"
-          style={{ backgroundImage: "url('/hero-banner.png')" }}
+          style={{ backgroundImage: "url('/hero-banner.png')"}}
         >
           <div className="absolute inset-0 bg-linear-to-r from-white/95 via-white/60 to-transparent hidden sm:block" />
           <div className="absolute inset-0 bg-white/80 sm:hidden" />
