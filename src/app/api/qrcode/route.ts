@@ -1,6 +1,9 @@
 import QRCode from 'qrcode';
 import { NextResponse } from 'next/server';
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const upiUrl = `upi://pay?pa=8100264108@upi&pn=UK%20MART&am=&cu=INR&tn=UK%20MART%20Payment`;

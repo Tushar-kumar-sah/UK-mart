@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 // ============================================================
 // GET – fetch all orders (with optional limit/offset)
 // ============================================================
@@ -54,7 +57,7 @@ export async function POST(req: NextRequest) {
       customerName,
       customerPhone,
       deliveryAddress,
-      pincode,        // ✅ now supported in schema
+      pincode,
       notes,
       paymentMethod = 'UPI',
     } = body;
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
         customerName,
         customerPhone,
         deliveryAddress,
-        pincode: pincode || null,   // ✅ store pincode if provided
+        pincode: pincode || null,
         notes: notes || null,
         paymentMethod,
         items: {
@@ -155,7 +158,7 @@ export async function PUT(req: NextRequest) {
     if (status) updateData.status = status;
     if (paymentStatus) updateData.paymentStatus = paymentStatus;
 
-    // Optionally allow updating delivery details (if needed)
+    // Optionally allow updating delivery details
     if (rest.customerName) updateData.customerName = rest.customerName;
     if (rest.customerPhone) updateData.customerPhone = rest.customerPhone;
     if (rest.deliveryAddress) updateData.deliveryAddress = rest.deliveryAddress;
@@ -193,7 +196,6 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Optionally, instead of hard delete, you could soft-delete or cancel
-    // For now, we hard-delete (only if order status is PENDING or CANCELLED)
     const order = await db.order.findUnique({ where: { id } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });

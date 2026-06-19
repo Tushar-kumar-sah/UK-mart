@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 // ============================================================
 // GET – fetch all products (for admin)
 // ============================================================
@@ -171,7 +174,6 @@ export async function PUT(req: NextRequest) {
         try {
           updateData[key] = transform(fields[key]);
         } catch (err) {
-          // ✅ fixed: cast err to Error
           return NextResponse.json(
             { error: `Invalid value for field '${key}': ${(err as Error).message}` },
             { status: 400 }

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/lib/db';
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -25,6 +28,13 @@ export async function POST(req: NextRequest) {
 
     // 1. Verify signature
     const secret = process.env.RAZORPAY_KEY_SECRET!;
+    if (!secret) {
+      return NextResponse.json(
+        { error: 'Razorpay secret not configured' },
+        { status: 500 }
+      );
+    }
+
     const generatedSignature = crypto
       .createHmac('sha256', secret)
       .update(razorpay_order_id + '|' + razorpay_payment_id)
