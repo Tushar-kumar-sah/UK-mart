@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-// ✅ Prevents static generation at build time
+// ✅ Force dynamic runtime – no static generation
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
+// ✅ Explicitly prevent any static generation (for safety)
+export async function generateStaticParams() {
+  return [];
+}
 
 export async function GET() {
   try {
@@ -64,7 +72,7 @@ export async function PUT(req: NextRequest) {
         name,
         nameHi,
         nameBn,
-        parentId: parentId ?? null,   // ✅ allow moving a category to a different parent
+        parentId: parentId ?? null,
         image,
         isActive,
         sortOrder,
@@ -85,9 +93,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
 
-    // Use a transaction to delete everything safely
     const result = await db.$transaction(async (tx) => {
-      // 1. Recursively collect all descendant category IDs
       async function collectDescendantIds(parentId: string): Promise<string[]> {
         const children = await tx.category.findMany({
           where: { parentId },
@@ -104,7 +110,6 @@ export async function DELETE(req: NextRequest) {
       const descendantIds = await collectDescendantIds(id);
       const allCategoryIds = [...descendantIds, id];
 
-      // 2. Find all products belonging to any of these categories
       const products = await tx.product.findMany({
         where: {
           OR: [
@@ -116,21 +121,15 @@ export async function DELETE(req: NextRequest) {
       });
       const productIds = products.map((p) => p.id);
 
-      // 3. Delete order items for these products (FK constraint)
       if (productIds.length > 0) {
         await tx.orderItem.deleteMany({
           where: { productId: { in: productIds } },
         });
-      }
-
-      // 4. Delete the products themselves
-      if (productIds.length > 0) {
         await tx.product.deleteMany({
           where: { id: { in: productIds } },
         });
       }
 
-      // 5. Delete categories (children first, then parent)
       for (const catId of allCategoryIds) {
         await tx.category.delete({ where: { id: catId } });
       }
