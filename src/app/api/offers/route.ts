@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 // ============================================================
 // GET – fetch all offers
 // ============================================================
@@ -31,7 +34,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Validate required fields
     if (!body.name || body.discountValue === undefined || body.discountValue === null) {
       return NextResponse.json(
         { error: 'Name and discount value are required' },
@@ -51,7 +53,6 @@ export async function POST(req: NextRequest) {
         isActive: body.isActive !== false,
         startDate: body.startDate ? new Date(body.startDate) : null,
         endDate: body.endDate ? new Date(body.endDate) : null,
-        // Always set these, even if the model has defaults (helps with type safety)
         createdAt: now,
         updatedAt: now,
       },
@@ -82,10 +83,8 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Build update object, only including fields that were sent
     const updateData: Record<string, unknown> = {};
 
-    // Allowed fields and their transformation
     const fieldMap: Record<string, (val: any) => unknown> = {
       name: (v) => v?.trim() || '',
       description: (v) => v?.trim() || '',
@@ -104,7 +103,6 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // Always update the updatedAt timestamp
     updateData.updatedAt = new Date();
 
     const offer = await db.offer.update({
