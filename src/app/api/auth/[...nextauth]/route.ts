@@ -2,8 +2,11 @@ import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { db } from "@/lib/db";
 
-// ✅ Prevent static generation at build time
+// ✅ Force dynamic runtime – no static generation
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "sah05tushar@gmail.com";
 
