@@ -2,6 +2,9 @@ import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { db } from "@/lib/db";
 
+// ✅ Prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "sah05tushar@gmail.com";
 
 export const authOptions: AuthOptions = {
@@ -29,7 +32,6 @@ export const authOptions: AuthOptions = {
             },
           });
         } else {
-          // If this is the admin email, ensure role is ADMIN
           await db.user.update({
             where: { email: user.email! },
             data: {
@@ -52,13 +54,12 @@ export const authOptions: AuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        // ✅ Fetch the user from the database to get the latest role
         const dbUser = await db.user.findUnique({
           where: { email: session.user.email! },
         });
         if (dbUser) {
           (session.user as any).id = dbUser.id;
-          (session.user as any).role = dbUser.role; // 👈 critical
+          (session.user as any).role = dbUser.role;
         } else {
           (session.user as any).id = token.id;
           (session.user as any).role = token.role;
