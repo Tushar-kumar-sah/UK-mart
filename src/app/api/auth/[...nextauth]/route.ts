@@ -8,6 +8,11 @@ export const runtime = 'nodejs';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
+// ✅ Explicitly prevent any static generation of this catch‑all route
+export async function generateStaticParams() {
+  return [];
+}
+
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "sah05tushar@gmail.com";
 
 export const authOptions: AuthOptions = {
