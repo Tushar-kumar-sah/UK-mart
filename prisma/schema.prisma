@@ -4,11 +4,12 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // 🔴 url is now configured in prisma.config.ts (not here)
 }
 
-// 🔑 Enable UUID extension in PostgreSQL (run once on your database)
-// Run: CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+// ============================================================
+// Models – unchanged
+// ============================================================
 
 model User {
   id             String   @id @default(uuid())
