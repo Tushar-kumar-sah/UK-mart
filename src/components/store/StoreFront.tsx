@@ -26,6 +26,7 @@ import { calculatePrice } from '@/lib/price-utils';
 import { t, type Language } from '@/lib/i18n';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
+import Image from 'next/image'; // ✅ added for image optimization
 
 // ─── Types ──────────────────────────────────────────────
 interface Product {
@@ -472,11 +473,15 @@ export default function StoreFront() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
-              <img
-                src="/logo.png"
-                alt="UK MART"
-                className="h-12 w-auto object-contain"
-              />
+              <div className="relative h-12 w-auto aspect-square">
+                <Image
+                  src="/logo.png"
+                  alt="UK MART"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
               <span className="text-xl font-bold text-[#8D6E63] hidden sm:block">
                 {t('storeName', language)}
               </span>
@@ -618,7 +623,9 @@ export default function StoreFront() {
           </SheetHeader>
           <div className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <img src="/logo.png" alt="UK MART" className="h-10 w-auto" />
+              <div className="relative h-10 w-10">
+                <Image src="/logo.png" alt="UK MART" fill className="object-contain" />
+              </div>
               <span className="text-lg font-bold text-[#8D6E63]">{t('storeName', language)}</span>
             </div>
             <Separator className="mb-4" />
@@ -681,12 +688,21 @@ export default function StoreFront() {
       {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1">
         {/* ============ HERO ============ */}
-        <section
-          className="relative w-full bg-cover bg-center bg-no-repeat bg-[#D7CCC8] min-h-56 sm:min-h-72 md:min-h-96"
-          style={{ backgroundImage: "url('/hero-banner.png')"}}
-        >
+        <section className="relative w-full min-h-56 sm:min-h-72 md:min-h-96 bg-[#D7CCC8]">
+          {/* Background Image using next/image */}
+          <Image
+            src="/banner.png"
+            alt="Hero banner"
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+          />
+          {/* Overlay gradient for desktop */}
           <div className="absolute inset-0 bg-linear-to-r from-white/95 via-white/60 to-transparent hidden sm:block" />
+          {/* Overlay for mobile */}
           <div className="absolute inset-0 bg-white/80 sm:hidden" />
+
           <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 md:px-14 flex items-center min-h-56 sm:min-h-72 md:min-h-96">
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -893,7 +909,9 @@ export default function StoreFront() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src="/logo.png" alt="UK MART" className="h-8 w-auto" />
+                <div className="relative h-8 w-8">
+                  <Image src="/logo.png" alt="UK MART" fill className="object-contain" />
+                </div>
                 <span className="text-lg font-bold text-white">{t('storeName', language)}</span>
               </div>
               <p className="text-sm text-gray-400 leading-relaxed">
