@@ -2,19 +2,27 @@ import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { db } from "@/lib/db";
 
-// ✅ Force dynamic runtime – no static generation
+// ============================================================
+// 🚀 Force dynamic runtime – NEVER static
+// ============================================================
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
-// ✅ Explicitly prevent any static generation of this catch‑all route
+// Explicitly say "no static paths" – this is the key for catch‑all routes
 export async function generateStaticParams() {
   return [];
 }
 
+// ============================================================
+// Admin email from environment
+// ============================================================
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "sah05tushar@gmail.com";
 
+// ============================================================
+// NextAuth configuration
+// ============================================================
 export const authOptions: AuthOptions = {
   providers: [
     GoogleProvider({
