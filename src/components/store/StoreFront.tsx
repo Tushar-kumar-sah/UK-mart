@@ -26,7 +26,7 @@ import { calculatePrice } from '@/lib/price-utils';
 import { t, type Language } from '@/lib/i18n';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
-import Image from 'next/image'; // ✅ added for image optimization
+import Image from 'next/image';
 
 // ─── Types ──────────────────────────────────────────────
 interface Product {
@@ -687,46 +687,49 @@ export default function StoreFront() {
 
       {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1">
-        {/* ============ HERO ============ */}
-        <section className="relative w-full min-h-56 sm:min-h-72 md:min-h-96 bg-[#D7CCC8]">
-          {/* Background Image using next/image */}
-          <Image
-            src="/banner.png"
-            alt="Hero banner"
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-          />
-          {/* Overlay gradient for desktop */}
-          <div className="absolute inset-0 bg-linear-to-r from-white/95 via-white/60 to-transparent hidden sm:block" />
-          {/* Overlay for mobile */}
-          <div className="absolute inset-0 bg-white/80 sm:hidden" />
+        {/* ============ HERO (UPDATED for better visibility) ============ */}
+        <section className="relative w-full min-h-70 sm:min-h-85 md:min-h-105 bg-[#D7CCC8] overflow-hidden">
+  {/* Background Image using next/image */}
+  <Image
+    src="/banner.png"
+    alt="Hero banner"
+    fill
+    priority
+    className="object-cover"
+    sizes="100vw"
+  />
+  {/* Dark overlay for desktop (gradient) */}
+  <div className="absolute inset-0 bg-linear-to-r from-black/40 via-black/10 to-transparent hidden sm:block" />
+  {/* Dark overlay for mobile (solid) */}
+  <div className="absolute inset-0 bg-black/30 sm:hidden" />
 
-          <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 md:px-14 flex items-center min-h-56 sm:min-h-72 md:min-h-96">
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="max-w-md md:max-w-lg"
-            >
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-3 leading-tight">
-                {t('heroTitle', language)}
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 leading-relaxed">
-                {t('heroSubtitle', language)}
-              </p>
-              <Button
-                size="lg"
-                className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white rounded-full px-6 sm:px-8 shadow-lg shadow-[#8D6E63]/30"
-                onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                {t('shopNow', language)}
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </motion.div>
-          </div>
-        </section>
+  <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 md:px-14 flex items-center min-h-70 sm:min-h-85 md:min-h-105">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
+      className="max-w-md md:max-w-lg"
+    >
+      <span className="inline-block text-xs font-semibold text-white/80 bg-black/30 backdrop-blur-sm px-4 py-1.5 rounded-full mb-4 tracking-wider uppercase">
+        {t('storeName', language)}
+      </span>
+      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4 leading-tight drop-shadow-lg">
+        {t('heroTitle', language)}
+      </h1>
+      <p className="text-sm sm:text-base text-white/90 mb-5 sm:mb-7 leading-relaxed drop-shadow-md max-w-sm">
+        {t('heroSubtitle', language)}
+      </p>
+      <Button
+        size="lg"
+        className="bg-white text-[#8D6E63] hover:bg-gray-100 rounded-full px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-semibold"
+        onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
+      >
+        {t('shopNow', language)}
+        <ArrowRight className="w-4 h-4 ml-2" />
+      </Button>
+    </motion.div>
+  </div>
+</section>
 
         {/* ============ CATEGORY BAR ============ */}
         <section className="border-b border-gray-100 bg-white sticky top-16 z-40">
