@@ -18,7 +18,7 @@ export async function generateStaticParams() {
 // ============================================================
 // Admin email from environment
 // ============================================================
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "sah05tushar@gmail.com";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "martuk877@gmail.com";
 
 // ============================================================
 // NextAuth configuration
