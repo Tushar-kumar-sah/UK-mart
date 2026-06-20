@@ -15,7 +15,6 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -81,11 +80,47 @@ const DELIVERY_CHARGE = 50;
 
 const CATEGORY_EMOJI: Record<string, string> = {
   'Fruits & Vegetables': '🍎',
+  'Fruits': '🍇',
+  'Vegetables': '🥦',
   'Dairy & Breakfast': '🥛',
+  'Dairy': '🧀',
+  'Breakfast': '🍳',
   'Staples': '🌾',
+  'Atta': '🌾',
+  'Rice': '🍚',
+  'Flour': '🌾',
+  'Pulses': '🫘',
+  'Dal': '🫘',
+  'Lentils': '🫘',
+  'Spices & Masala': '🌶️',
+  'Spices': '🌶️',
+  'Masala': '🌶️',
+  'Condiments': '🧂',
+  'Oil & Ghee': '🧴',
+  'Edible Oil': '🧴',
+  'Ghee': '🧈',
   'Snacks & Beverages': '🍿',
+  'Snacks': '🍪',
+  'Beverages': '🥤',
+  'Tea & Coffee': '☕',
+  'Tea': '🍵',
+  'Coffee': '☕',
+  'Bakery': '🍞',
+  'Sweets': '🍬',
+  'Frozen Food': '🧊',
+  'Meat & Seafood': '🍗',
+  'Meat': '🍖',
+  'Fish': '🐟',
+  'Seafood': '🦐',
+  'Eggs': '🥚',
   'Personal Care': '💄',
+  'Baby Care': '🍼',
+  'Health Care': '💊',
   'Household': '🏠',
+  'Cleaning': '🧹',
+  'Detergent': '🧼',
+  'Pet Care': '🐾',
+  'Stationery': '✏️',
 };
 
 const PASTEL_COLORS = [
@@ -115,8 +150,10 @@ function getPastelColor(name: string): string {
 }
 
 function getCategoryEmoji(catName: string): string {
-  for (const [key, emoji] of Object.entries(CATEGORY_EMOJI)) {
-    if (catName.toLowerCase().includes(key.toLowerCase())) return emoji;
+  const lower = catName.toLowerCase();
+  const keys = Object.keys(CATEGORY_EMOJI).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (lower.includes(key.toLowerCase())) return CATEGORY_EMOJI[key];
   }
   return '🛒';
 }
@@ -250,7 +287,7 @@ export default function StoreFront() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Filtered products ──
+  // ── Filtered products (used when a category/search is active) ──
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
     if (selectedCategory) {
@@ -284,6 +321,29 @@ export default function StoreFront() {
     const cat = categories.find((c) => c.id === selectedCategory);
     return (cat?.children || []).filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   }, [categories, selectedCategory]);
+
+  // ── Products grouped by category (default "browse all" view) ──
+  const productsByCategory = useMemo(() => {
+    const activeProducts = products.filter((p) => p.isActive);
+    const groups: { category: Category; items: Product[] }[] = [];
+    for (const cat of parentCategories) {
+      let items = activeProducts.filter((p) => p.categoryId === cat.id);
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        items = items.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.nameHi && p.nameHi.toLowerCase().includes(q)) ||
+            (p.nameBn && p.nameBn.toLowerCase().includes(q)) ||
+            p.description.toLowerCase().includes(q)
+        );
+      }
+      if (items.length > 0) groups.push({ category: cat, items });
+    }
+    return groups;
+  }, [products, parentCategories, searchQuery]);
+
+  const isBrowseAllView = !selectedCategory && !selectedSubcategory;
 
   // ── Cart totals ──
   const cartTotal = getCartTotal();
@@ -326,13 +386,11 @@ export default function StoreFront() {
 
   // ── Place order (Razorpay only) ──
   const handlePlaceOrder = async () => {
-    // Validate delivery form
     if (!deliveryForm.name || !deliveryForm.phone || !deliveryForm.address) {
       toast.error('Please fill all delivery details');
       return;
     }
 
-    // Build order data
     const orderData = {
       userId: user?.id || 'guest',
       items: cart.map((item) => ({
@@ -354,7 +412,6 @@ export default function StoreFront() {
       paymentMethod: 'RAZORPAY',
     };
 
-    // Razorpay flow
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
@@ -362,7 +419,6 @@ export default function StoreFront() {
 
     setRazorpayLoading(true);
     try {
-      // 1. Create Razorpay order
       const razorpayRes = await fetch('/api/create-razorpay-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -375,7 +431,6 @@ export default function StoreFront() {
       const razorpayData = await razorpayRes.json();
       if (!razorpayRes.ok) throw new Error(razorpayData.error || 'Failed to create payment order');
 
-      // 2. Open Razorpay checkout
       const options = {
         key: razorpayData.keyId,
         amount: razorpayData.amount,
@@ -398,7 +453,6 @@ export default function StoreFront() {
           },
         },
         handler: async (response: any) => {
-          // 3. Verify payment and create order
           try {
             const verifyRes = await fetch('/api/verify-payment', {
               method: 'POST',
@@ -451,18 +505,57 @@ export default function StoreFront() {
       setSelectedCategory(null);
     } else {
       setSelectedCategory(catId);
+      setSelectedSubcategory(null);
     }
   };
+
+  const scrollToCategorySection = (catId: string) => {
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setSearchQuery('');
+    // wait a tick for the browse-all view to render, then scroll to the section
+    setTimeout(() => {
+      document.getElementById(`cat-${catId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const renderProductGrid = (items: Product[]) => (
+    <motion.div
+      className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4"
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.02 } },
+      }}
+    >
+      {items.map((product) => (
+        <ProductCard
+          key={product.id}
+          product={product}
+          language={language}
+          selectedUnit={selectedUnits[product.id] || product.baseUnit}
+          selectedQty={selectedQtys[product.id] || 1}
+          isAdded={!!addedProducts[product.id]}
+          customWeight={customWeights[product.id] || ''}
+          onUnitChange={(unit) => setSelectedUnits((prev) => ({ ...prev, [product.id]: unit }))}
+          onQtyChange={(qty) => setSelectedQtys((prev) => ({ ...prev, [product.id]: qty }))}
+          onCustomWeightChange={(val) => setCustomWeights((prev) => ({ ...prev, [product.id]: val }))}
+          onAddToCart={() => handleAddToCart(product)}
+        />
+      ))}
+    </motion.div>
+  );
 
   // ──────────────────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-white overflow-x-hidden w-full">
       {/* ============ HEADER ============ */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
             {/* Logo */}
             <div
               className="flex items-center gap-2 shrink-0 cursor-pointer"
@@ -473,7 +566,7 @@ export default function StoreFront() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
-              <div className="relative h-12 w-auto aspect-square">
+              <div className="relative h-9 w-9 sm:h-12 sm:w-12 shrink-0">
                 <Image
                   src="/logo.png"
                   alt="UK MART"
@@ -482,7 +575,7 @@ export default function StoreFront() {
                   priority
                 />
               </div>
-              <span className="text-xl font-bold text-[#8D6E63] hidden sm:block">
+              <span className="text-base sm:text-xl font-bold text-[#8D6E63] hidden sm:block">
                 {t('storeName', language)}
               </span>
             </div>
@@ -506,7 +599,7 @@ export default function StoreFront() {
             </div>
 
             {/* Right Actions */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
               {/* Language Switcher */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -535,8 +628,8 @@ export default function StoreFront() {
               {/* Cart Button */}
               <Button
                 variant="ghost"
-                size="sm"
-                className="relative text-gray-600 hover:text-[#8D6E63]"
+                size="icon"
+                className="relative text-gray-600 hover:text-[#8D6E63] h-9 w-9 sm:h-10 sm:w-10"
                 onClick={() => setCartOpen(true)}
               >
                 <ShoppingCart className="w-5 h-5" />
@@ -547,7 +640,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
-              {/* ===== UPDATED USER / AUTH ===== */}
+              {/* ===== USER / AUTH ===== */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -589,7 +682,7 @@ export default function StoreFront() {
               )}
 
               {/* Mobile Hamburger */}
-              <Button variant="ghost" size="icon" className="md:hidden text-gray-600" onClick={() => setMobileMenuOpen(true)}>
+              <Button variant="ghost" size="icon" className="md:hidden text-gray-600 h-9 w-9" onClick={() => setMobileMenuOpen(true)}>
                 <Menu className="w-5 h-5" />
               </Button>
             </div>
@@ -597,7 +690,7 @@ export default function StoreFront() {
         </div>
 
         {/* Mobile Search */}
-        <div className="md:hidden px-4 pb-3">
+        <div className="md:hidden px-3 pb-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
@@ -649,7 +742,6 @@ export default function StoreFront() {
               </div>
             </div>
             <Separator className="mb-4" />
-            {/* ===== UPDATED MOBILE AUTH ===== */}
             {isAuthenticated ? (
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -686,87 +778,92 @@ export default function StoreFront() {
       </Sheet>
 
       {/* ============ MAIN CONTENT ============ */}
-      <main className="flex-1">
-        {/* ============ HERO (UPDATED for better visibility) ============ */}
-        <section className="relative w-full min-h-70 sm:min-h-85 md:min-h-105 bg-[#D7CCC8] overflow-hidden">
-  {/* Background Image using next/image */}
-  <Image
-    src="/banner.png"
-    alt="Hero banner"
-    fill
-    priority
-    className="object-cover"
-    sizes="100vw"
-  />
-  {/* Dark overlay for desktop (gradient) */}
-  <div className="absolute inset-0 bg-linear-to-r from-black/40 via-black/10 to-transparent hidden sm:block" />
-  {/* Dark overlay for mobile (solid) */}
-  <div className="absolute inset-0 bg-black/30 sm:hidden" />
+      <main className="flex-1 w-full">
+        {/* ============ HERO ============ */}
+        <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none bg-[#D7CCC8] overflow-hidden">
+          <Image
+            src="/banner.png"
+            alt="Hero banner"
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+          />
+          <div className="absolute inset-0 bg-linear-to-r from-black/40 via-black/10 to-transparent hidden sm:block" />
+          <div className="absolute inset-0 bg-black/30 sm:hidden" />
 
-  <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 md:px-14 flex items-center min-h-70 sm:min-h-85 md:min-h-105">
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: 'easeOut' }}
-      className="max-w-md md:max-w-lg"
-    >
-      <span className="inline-block text-xs font-semibold text-white/80 bg-black/30 backdrop-blur-sm px-4 py-1.5 rounded-full mb-4 tracking-wider uppercase">
-        {t('storeName', language)}
-      </span>
-      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4 leading-tight drop-shadow-lg">
-        {t('heroTitle', language)}
-      </h1>
-      <p className="text-sm sm:text-base text-white/90 mb-5 sm:mb-7 leading-relaxed drop-shadow-md max-w-sm">
-        {t('heroSubtitle', language)}
-      </p>
-      <Button
-        size="lg"
-        className="bg-white text-[#8D6E63] hover:bg-gray-100 rounded-full px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-semibold"
-        onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
-      >
-        {t('shopNow', language)}
-        <ArrowRight className="w-4 h-4 ml-2" />
-      </Button>
-    </motion.div>
-  </div>
-</section>
+          <div className="relative z-10 max-w-7xl mx-auto px-4 xs:px-5 sm:px-8 md:px-14 flex items-center min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className="max-w-[85%] xs:max-w-md md:max-w-lg"
+            >
+              <span className="inline-block text-[10px] xs:text-xs font-semibold text-white/80 bg-black/30 backdrop-blur-sm px-3 xs:px-4 py-1 xs:py-1.5 rounded-full mb-3 xs:mb-4 tracking-wider uppercase">
+                {t('storeName', language)}
+              </span>
+              <h1 className="text-xl xs:text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 xs:mb-3 sm:mb-4 leading-tight drop-shadow-lg">
+                {t('heroTitle', language)}
+              </h1>
+              <p className="text-xs xs:text-sm sm:text-base text-white/90 mb-4 xs:mb-5 sm:mb-7 leading-relaxed drop-shadow-md max-w-sm">
+                {t('heroSubtitle', language)}
+              </p>
+              <Button
+                size="lg"
+                className="bg-white text-[#8D6E63] hover:bg-gray-100 rounded-full px-6 xs:px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-semibold text-sm sm:text-base"
+                onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                {t('shopNow', language)}
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </motion.div>
+          </div>
+        </section>
 
-        {/* ============ CATEGORY BAR ============ */}
-        <section className="border-b border-gray-100 bg-white sticky top-16 z-40">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <ScrollArea className="w-auto">
-              <div className="flex gap-2 py-3 overflow-x-auto no-scrollbar" style={{ scrollbarWidth: 'none' }}>
-                <button
-                  onClick={() => { setSelectedCategory(null); setSelectedSubcategory(null); }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap transition-all ${
-                    !selectedCategory
-                      ? 'border-[#8D6E63] bg-[#8D6E63] text-white shadow-md shadow-[#8D6E63]/30'
-                      : 'border-gray-200 text-gray-600 hover:border-[#8D6E63]/50 hover:text-[#8D6E63] bg-white'
-                  }`}
-                >
-                  <span>🛒</span>
-                  {t('allCategories', language)}
-                </button>
-                {parentCategories.map((cat) => {
-                  const isSelected = selectedCategory === cat.id;
-                  const emoji = getCategoryEmoji(cat.name);
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => toggleCategory(cat.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap transition-all ${
-                        isSelected
-                          ? 'border-[#8D6E63] bg-[#8D6E63] text-white shadow-md shadow-[#8D6E63]/30'
-                          : 'border-gray-200 text-gray-600 hover:border-[#8D6E63]/50 hover:text-[#8D6E63] bg-white'
-                      }`}
-                    >
-                      <span>{emoji}</span>
-                      {getLocalName(cat, language)}
-                    </button>
-                  );
-                })}
-              </div>
-            </ScrollArea>
+        {/* ============ CATEGORY BAR (native horizontal scroll) ============ */}
+        <section className="border-b border-gray-100 bg-white sticky top-14 sm:top-16 z-40">
+          <div className="max-w-7xl mx-auto">
+            <div
+              className="flex gap-2 py-3 overflow-x-auto px-3 sm:px-6 lg:px-8"
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                WebkitOverflowScrolling: 'touch',
+              }}
+            >
+              <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+              `}</style>
+              <button
+                onClick={() => { setSelectedCategory(null); setSelectedSubcategory(null); }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
+                  !selectedCategory
+                    ? 'border-[#8D6E63] bg-[#8D6E63] text-white shadow-md shadow-[#8D6E63]/30'
+                    : 'border-gray-200 text-gray-600 hover:border-[#8D6E63]/50 hover:text-[#8D6E63] bg-white'
+                }`}
+              >
+                <span>🛒</span>
+                {t('allCategories', language)}
+              </button>
+              {parentCategories.map((cat) => {
+                const isSelected = selectedCategory === cat.id;
+                const emoji = getCategoryEmoji(cat.name);
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => toggleCategory(cat.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
+                      isSelected
+                        ? 'border-[#8D6E63] bg-[#8D6E63] text-white shadow-md shadow-[#8D6E63]/30'
+                        : 'border-gray-200 text-gray-600 hover:border-[#8D6E63]/50 hover:text-[#8D6E63] bg-white'
+                    }`}
+                  >
+                    <span>{emoji}</span>
+                    {getLocalName(cat, language)}
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Subcategories */}
             <AnimatePresence>
@@ -778,10 +875,13 @@ export default function StoreFront() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="flex gap-2 pb-3 overflow-x-auto no-scrollbar" style={{ scrollbarWidth: 'none' }}>
+                  <div
+                    className="flex gap-2 pb-3 overflow-x-auto px-3 sm:px-6 lg:px-8"
+                    style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+                  >
                     <button
                       onClick={() => setSelectedSubcategory(null)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap transition-all ${
+                      className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap shrink-0 transition-all ${
                         !selectedSubcategory
                           ? 'bg-[#8D6E63]/10 border-[#8D6E63]/30 text-[#8D6E63]'
                           : 'border-gray-200 text-gray-500 hover:border-gray-300'
@@ -795,7 +895,7 @@ export default function StoreFront() {
                         <button
                           key={sub.id}
                           onClick={() => setSelectedSubcategory(sub.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap transition-all ${
+                          className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap shrink-0 transition-all ${
                             isSelected
                               ? 'bg-[#8D6E63]/10 border-[#8D6E63]/30 text-[#8D6E63]'
                               : 'border-gray-200 text-gray-500 hover:border-gray-300'
@@ -819,7 +919,7 @@ export default function StoreFront() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-[#FFB300]/10 border-b border-[#FFB300]/30"
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2">
               <p className="text-xs sm:text-sm text-[#8D6E63] text-center">
                 🛒 {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
               </p>
@@ -827,22 +927,8 @@ export default function StoreFront() {
           </motion.div>
         )}
 
-        {/* ============ PRODUCT GRID ============ */}
-        <section id="product-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                {selectedCategory
-                  ? getLocalName(parentCategories.find(c => c.id === selectedCategory) || { name: '', nameHi: null, nameBn: null }, language)
-                  : t('products', language)
-                }
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                {filteredProducts.length} {language === 'hi' ? 'उत्पाद' : language === 'bn' ? 'পণ্য' : 'products'}
-              </p>
-            </div>
-          </div>
-
+        {/* ============ PRODUCT SECTION ============ */}
+        <section id="product-section" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
           {loading && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -869,39 +955,73 @@ export default function StoreFront() {
             </div>
           )}
 
-          {!loading && !error && filteredProducts.length === 0 && (
+          {!loading && !error && isBrowseAllView && !searchQuery.trim() && productsByCategory.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Package className="w-16 h-16 text-gray-300 mb-4" />
               <p className="text-lg font-medium text-gray-500">{t('noProducts', language)}</p>
             </div>
           )}
 
-          {!loading && !error && (
-            <motion.div
-              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4"
-              initial="hidden"
-              animate="visible"
-              variants={{
-                hidden: {},
-                visible: { transition: { staggerChildren: 0.03 } },
-              }}
-            >
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  language={language}
-                  selectedUnit={selectedUnits[product.id] || product.baseUnit}
-                  selectedQty={selectedQtys[product.id] || 1}
-                  isAdded={!!addedProducts[product.id]}
-                  customWeight={customWeights[product.id] || ''}
-                  onUnitChange={(unit) => setSelectedUnits((prev) => ({ ...prev, [product.id]: unit }))}
-                  onQtyChange={(qty) => setSelectedQtys((prev) => ({ ...prev, [product.id]: qty }))}
-                  onCustomWeightChange={(val) => setCustomWeights((prev) => ({ ...prev, [product.id]: val }))}
-                  onAddToCart={() => handleAddToCart(product)}
-                />
+          {/* Browse-all view: grouped by category */}
+          {!loading && !error && isBrowseAllView && (
+            <div className="space-y-10 sm:space-y-12">
+              {productsByCategory.map(({ category, items }) => (
+                <div key={category.id} id={`cat-${category.id}`} className="scroll-mt-32">
+                  <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl sm:text-2xl">{getCategoryEmoji(category.name)}</span>
+                      <div>
+                        <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
+                          {getLocalName(category, language)}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-gray-500">
+                          {items.length} {language === 'hi' ? 'उत्पाद' : language === 'bn' ? 'পণ্য' : 'products'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleCategory(category.id)}
+                      className="flex items-center gap-1 text-xs sm:text-sm font-medium text-[#8D6E63] hover:underline shrink-0"
+                    >
+                      {t('viewAll', language)} <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {renderProductGrid(items)}
+                </div>
               ))}
-            </motion.div>
+
+              {searchQuery.trim() && productsByCategory.length === 0 && !loading && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Package className="w-16 h-16 text-gray-300 mb-4" />
+                  <p className="text-lg font-medium text-gray-500">{t('noProducts', language)}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Filtered view: single category / subcategory selected */}
+          {!loading && !error && !isBrowseAllView && (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                    {getLocalName(parentCategories.find(c => c.id === selectedCategory) || { name: '', nameHi: null, nameBn: null }, language)}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {filteredProducts.length} {language === 'hi' ? 'उत्पाद' : language === 'bn' ? 'পণ্য' : 'products'}
+                  </p>
+                </div>
+              </div>
+
+              {filteredProducts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Package className="w-16 h-16 text-gray-300 mb-4" />
+                  <p className="text-lg font-medium text-gray-500">{t('noProducts', language)}</p>
+                </div>
+              ) : (
+                renderProductGrid(filteredProducts)
+              )}
+            </>
           )}
         </section>
       </main>
@@ -928,13 +1048,13 @@ export default function StoreFront() {
 
             <div>
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
-                {language === 'hi' ? 'শ্রেণিযাবদ্ধ' : language === 'bn' ? 'বিভাগ' : 'Quick Links'}
+                {language === 'hi' ? 'श्रेणियाँ' : language === 'bn' ? 'বিভাগ' : 'Quick Links'}
               </h3>
               <ul className="space-y-2">
                 {parentCategories.map((cat) => (
                   <li key={cat.id}>
                     <button
-                      onClick={() => { setSelectedCategory(cat.id); setSelectedSubcategory(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      onClick={() => scrollToCategorySection(cat.id)}
                       className="text-sm text-gray-400 hover:text-[#FFB300] transition-colors"
                     >
                       {getCategoryEmoji(cat.name)} {getLocalName(cat, language)}
@@ -981,10 +1101,10 @@ export default function StoreFront() {
         </div>
       </footer>
 
-      {/* ============ CART SHEET ============ */}
+      {/* ============ CART SHEET (fixed scrolling) ============ */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
-          <SheetHeader className="px-6 pt-6 pb-3 border-b">
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col h-full max-h-screen">
+          <SheetHeader className="px-4 sm:px-6 pt-6 pb-3 border-b shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <SheetTitle className="text-lg font-bold text-gray-900">{t('yourCart', language)}</SheetTitle>
@@ -1002,7 +1122,7 @@ export default function StoreFront() {
           </SheetHeader>
 
           {cart.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center min-h-0">
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                 <ShoppingCart className="w-10 h-10 text-gray-300" />
               </div>
@@ -1013,7 +1133,8 @@ export default function StoreFront() {
             </div>
           ) : (
             <>
-              <ScrollArea className="flex-1 px-6 py-4">
+              {/* This is the scrollable region — min-h-0 is required so flex-1 can actually shrink and scroll */}
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4">
                 <div className="space-y-3">
                   {cart.map((item) => (
                     <CartItemRow
@@ -1025,9 +1146,9 @@ export default function StoreFront() {
                     />
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
 
-              <div className="border-t bg-gray-50 px-6 py-4 space-y-3">
+              <div className="border-t bg-gray-50 px-4 sm:px-6 py-4 space-y-3 shrink-0">
                 {minOrderRemaining > 0 && (
                   <div className="bg-[#FFB300]/10 border border-[#FFB300]/30 rounded-lg p-2.5">
                     <p className="text-xs text-[#8D6E63] text-center">
@@ -1081,8 +1202,8 @@ export default function StoreFront() {
 
       {/* ============ CHECKOUT DIALOG (Razorpay only) ============ */}
       <Dialog open={checkoutOpen} onOpenChange={(open) => { setCheckoutOpen(open); if (!open) setCheckoutStep(1); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
-          <div className="p-6">
+        <DialogContent className="max-w-lg w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto p-0">
+          <div className="p-4 sm:p-6">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold text-gray-900">
                 {checkoutStep === 1 ? 'Delivery Details'
@@ -1099,7 +1220,7 @@ export default function StoreFront() {
             <div className="flex items-center gap-2 mt-4 mb-6">
               {[1, 2, 3].map((step) => (
                 <React.Fragment key={step}>
-                  <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
+                  <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
                     checkoutStep >= step ? 'bg-[#8D6E63] text-white' : 'bg-gray-200 text-gray-500'
                   }`}>
                     {step}
@@ -1169,7 +1290,7 @@ export default function StoreFront() {
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Items</p>
-                  <ScrollArea className="max-h-48">
+                  <div className="max-h-48 overflow-y-auto">
                     <div className="space-y-2">
                       {cart.map((item) => (
                         <div key={item.productId} className="flex items-center justify-between text-sm py-1">
@@ -1183,7 +1304,7 @@ export default function StoreFront() {
                         </div>
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </div>
                 <Separator />
                 <div className="space-y-1.5 text-sm">
@@ -1212,7 +1333,7 @@ export default function StoreFront() {
             )}
           </div>
 
-          <div className="border-t px-6 py-4 flex items-center justify-between bg-gray-50">
+          <div className="border-t px-4 sm:px-6 py-4 flex items-center justify-between bg-gray-50">
             <Button variant="ghost" onClick={() => { if (checkoutStep > 1) setCheckoutStep((s) => s - 1); else setCheckoutOpen(false); }} className="text-gray-600">
               {checkoutStep === 1 ? 'Cancel' : 'Back'}
             </Button>
@@ -1253,7 +1374,7 @@ export default function StoreFront() {
 
       {/* ============ ORDER SUCCESS ============ */}
       <Dialog open={!!orderSuccessData} onOpenChange={(open) => { if (!open) setOrderSuccessData(null); }}>
-        <DialogContent className="max-w-sm text-center p-6">
+        <DialogContent className="max-w-sm w-[90vw] sm:w-full text-center p-6">
           <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 15, stiffness: 200 }}>
             <div className="w-20 h-20 bg-[#D7CCC8] rounded-full flex items-center justify-center mx-auto mb-5">
               <CheckCircle2 className="w-10 h-10 text-[#8D6E63]" />
@@ -1272,7 +1393,7 @@ export default function StoreFront() {
   );
 }
 
-// ─── Product Card (unchanged) ────────────────────────────
+// ─── Product Card ────────────────────────────
 interface ProductCardProps {
   product: Product;
   language: Language;
@@ -1309,6 +1430,7 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
         visible: { opacity: 1, y: 0 },
       }}
       transition={{ duration: 0.3 }}
+      className="min-w-0"
     >
       <Card className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow group h-full flex flex-col">
         <div className={`relative w-full aspect-square ${pastelColor} flex items-center justify-center overflow-hidden`}>
@@ -1334,12 +1456,12 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
           )}
         </div>
 
-        <CardContent className="p-3 flex flex-col flex-1 gap-1.5">
-          <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight min-h-[2.5em]">
+        <CardContent className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5">
+          <h3 className="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2 leading-tight min-h-[2.5em]">
             {displayName}
           </h3>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-[11px] sm:text-xs text-gray-400">
             {formatPrice(product.basePrice)} {t('per', language)} {product.baseUnit}
           </p>
 
@@ -1420,27 +1542,27 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
             </div>
           )}
 
-          <p className={`font-bold ${isCustom ? 'text-lg text-[#FFB300]' : 'text-base text-[#8D6E63]'}`}>
+          <p className={`font-bold ${isCustom ? 'text-base sm:text-lg text-[#FFB300]' : 'text-sm sm:text-base text-[#8D6E63]'}`}>
             {displayUnit && unitPrice > 0
-              ? <>{formatPrice(unitPrice)} <span className="text-xs font-normal text-gray-400">/ {displayUnit}</span></>
-              : <span className="text-xs font-normal text-gray-400">{t('selectUnit', language)}</span>
+              ? <>{formatPrice(unitPrice)} <span className="text-[10px] sm:text-xs font-normal text-gray-400">/ {displayUnit}</span></>
+              : <span className="text-[10px] sm:text-xs font-normal text-gray-400">{t('selectUnit', language)}</span>
             }
           </p>
 
-          <div className="flex items-center gap-2 mt-auto pt-1">
-            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center gap-1.5 sm:gap-2 mt-auto pt-1">
+            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden shrink-0">
               <button
                 onClick={() => onQtyChange(Math.max(1, selectedQty - 1))}
-                className="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+                className="w-6 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
               >
                 <Minus className="w-3 h-3" />
               </button>
-              <span className="w-7 h-7 flex items-center justify-center text-xs font-medium text-gray-700 border-x border-gray-200">
+              <span className="w-6 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-xs font-medium text-gray-700 border-x border-gray-200">
                 {selectedQty}
               </span>
               <button
                 onClick={() => onQtyChange(selectedQty + 1)}
-                className="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+                className="w-6 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -1448,7 +1570,7 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
 
             <Button
               size="sm"
-              className={`flex-1 h-8 text-xs font-medium transition-all ${
+              className={`flex-1 h-7 sm:h-8 text-[11px] sm:text-xs font-medium transition-all px-1.5 sm:px-3 ${
                 isAdded
                   ? 'bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/20'
                   : isCustom
@@ -1459,9 +1581,9 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
               disabled={!inStock || (isCustom && (!customWeight || parseFloat(customWeight) <= 0))}
             >
               {isAdded ? (
-                <><CheckCircle2 className="w-3 h-3 mr-1" /> {t('added', language)}</>
+                <><CheckCircle2 className="w-3 h-3 mr-1 shrink-0" /> <span className="truncate">{t('added', language)}</span></>
               ) : (
-                <><ShoppingCart className="w-3 h-3 mr-1" /> {t('addToCart', language)}</>
+                <><ShoppingCart className="w-3 h-3 mr-1 shrink-0" /> <span className="truncate">{t('addToCart', language)}</span></>
               )}
             </Button>
           </div>
@@ -1471,7 +1593,7 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
   );
 }
 
-// ─── Cart Item Row (unchanged) ──────────────────────────
+// ─── Cart Item Row ──────────────────────────
 interface CartItemRowProps {
   item: CartItem;
   language: Language;
