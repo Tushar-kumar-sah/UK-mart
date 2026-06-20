@@ -28,6 +28,17 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 
+// ─── Helpers ────────────────────────────────────────────
+// Fisher‑Yates shuffle – returns a new shuffled array
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 // ─── Types ──────────────────────────────────────────────
 interface Product {
   id: string;
@@ -325,7 +336,7 @@ export default function StoreFront() {
     }
   }, [loading, userLocation, locationPrompted]);
 
-  // ── Filtered products ──
+  // ── Filtered products – now shuffled ──
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
     if (selectedCategory) {
@@ -345,7 +356,8 @@ export default function StoreFront() {
           getLocalName(p.category, language).toLowerCase().includes(q)
       );
     }
-    return result;
+    // 🔀 Randomise the order each time the page loads / filter changes
+    return shuffleArray(result);
   }, [products, selectedCategory, selectedSubcategory, searchQuery, language]);
 
   // ── Parent categories ──
@@ -360,7 +372,7 @@ export default function StoreFront() {
     return (cat?.children || []).filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   }, [categories, selectedCategory]);
 
-  // ── Products grouped by category ──
+  // ── Products grouped by category – with random order per category ──
   const productsByCategory = useMemo(() => {
     const activeProducts = products.filter((p) => p.isActive);
     const groups: { category: Category; items: Product[] }[] = [];
@@ -376,7 +388,10 @@ export default function StoreFront() {
             p.description.toLowerCase().includes(q)
         );
       }
-      if (items.length > 0) groups.push({ category: cat, items });
+      if (items.length > 0) {
+        // 🔀 Shuffle the items within this category
+        groups.push({ category: cat, items: shuffleArray(items) });
+      }
     }
     return groups;
   }, [products, parentCategories, searchQuery]);
@@ -1082,13 +1097,15 @@ export default function StoreFront() {
                 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-2 xs:mb-3 sm:mb-4 leading-[1.1]"
                 style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.45)' }}
               >
-                {t('heroTitle', language)}
+                Fresh Groceries, Delivered
               </h1>
               <p
                 className="text-sm xs:text-base sm:text-lg text-white mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm font-medium"
                 style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
               >
-                {t('heroSubtitle', language)}
+                {userLocation
+                  ? `Quality products at wholesale prices. Min order ₹${effectiveMinOrder} for your location. Free delivery above ₹${FREE_DELIVERY_THRESHOLD}.`
+                  : 'Set your delivery location to see your minimum order. Free delivery above ₹5,000.'}
               </p>
               <Button
                 size="lg"
@@ -1247,7 +1264,7 @@ export default function StoreFront() {
             </div>
           )}
 
-          {/* Browse-all view: grouped by category */}
+          {/* Browse-all view: grouped by category, each category's products shuffled */}
           {!loading && !error && isBrowseAllView && (
             <div className="space-y-10 sm:space-y-12">
               {productsByCategory.map(({ category, items }) => (
@@ -1284,7 +1301,7 @@ export default function StoreFront() {
             </div>
           )}
 
-          {/* Filtered view */}
+          {/* Filtered view – shuffled as well */}
           {!loading && !error && !isBrowseAllView && (
             <>
               <div className="flex items-center justify-between mb-6">
