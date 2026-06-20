@@ -56,9 +56,15 @@ interface StoreState {
   setSearchQuery: (query: string) => void;
   selectedSubcategory: string | null;
   setSelectedSubcategory: (id: string | null) => void;
+
+  // ── NEW: Location & dynamic min order ──
+  userLocation: string | null;
+  effectiveMinOrder: number;
+  setUserLocation: (address: string | null) => void;
+  setEffectiveMinOrder: (minOrder: number) => void;
 }
 
-const MIN_ORDER = 2500;
+const DEFAULT_MIN_ORDER = 2500;
 
 export const useStore = create<StoreState>((set, get) => ({
   language: 'en',
@@ -94,14 +100,26 @@ export const useStore = create<StoreState>((set, get) => ({
   updateCartItem: (productId, updates) => {
     set({
       cart: get().cart.map((c) =>
-        c.productId === productId ? { ...c, ...updates, totalPrice: (updates.quantity ?? c.quantity) * (updates.pricePerUnit ?? c.pricePerUnit) } : c
+        c.productId === productId
+          ? {
+              ...c,
+              ...updates,
+              totalPrice: (updates.quantity ?? c.quantity) * (updates.pricePerUnit ?? c.pricePerUnit),
+            }
+          : c
       ),
     });
   },
   clearCart: () => set({ cart: [] }),
   getCartTotal: () => get().cart.reduce((sum, item) => sum + item.totalPrice, 0),
   getCartCount: () => get().cart.reduce((sum, item) => sum + item.quantity, 0),
-  getMinOrderRemaining: () => Math.max(0, MIN_ORDER - get().cart.reduce((sum, item) => sum + item.totalPrice, 0)),
+
+  // ── UPDATED: uses dynamic effectiveMinOrder ──
+  getMinOrderRemaining: () => {
+    const { cart, effectiveMinOrder } = get();
+    const total = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+    return Math.max(0, effectiveMinOrder - total);
+  },
 
   cartOpen: false,
   setCartOpen: (open) => set({ cartOpen: open }),
@@ -115,4 +133,10 @@ export const useStore = create<StoreState>((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   selectedSubcategory: null,
   setSelectedSubcategory: (id) => set({ selectedSubcategory: id }),
+
+  // ── NEW: Location state ──
+  userLocation: null,
+  effectiveMinOrder: DEFAULT_MIN_ORDER,
+  setUserLocation: (address) => set({ userLocation: address }),
+  setEffectiveMinOrder: (minOrder) => set({ effectiveMinOrder: minOrder }),
 }));

@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ShoppingCart, X, Minus, Plus, Trash2, ChevronRight, ChevronDown,
   ShoppingBag, Globe, LogOut, User, Package, MapPin, Phone,
-  CreditCard, CheckCircle2, Menu, ArrowRight, Loader2, AlertCircle
+  CreditCard, CheckCircle2, Menu, ArrowRight, Loader2, AlertCircle,
+  MapPin as MapPinIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { useStore, type CartItem } from '@/lib/store';
@@ -203,7 +204,7 @@ function getCustomInputLabel(unitType: string): string {
 export default function StoreFront() {
   const {
     language, setLanguage,
-    cart, addToCart, removeFromCart, updateCartItem, clearCart, getCartTotal, getCartCount,
+    cart, addToCart, removeFromCart, updateCartItem, clearCart, getCartTotal, getCartCount, getMinOrderRemaining,
     cartOpen, setCartOpen,
     checkoutOpen, setCheckoutOpen,
     orderSuccessData, setOrderSuccessData,
@@ -211,13 +212,17 @@ export default function StoreFront() {
     selectedSubcategory, setSelectedSubcategory,
     searchQuery, setSearchQuery,
     user, setUser,
+    userLocation,
+    effectiveMinOrder,
+    setUserLocation,
+    setEffectiveMinOrder,
   } = useStore();
 
   // ── NextAuth session ──
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
-  // ── Sync session with Zustand store ──
+  // ── Sync session ──
   useEffect(() => {
     if (session?.user) {
       setUser({
@@ -273,14 +278,11 @@ export default function StoreFront() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
 
-  // ── Location-based min order ──
-  const [effectiveMinOrder, setEffectiveMinOrder] = useState(DEFAULT_MIN_ORDER);
-  const [distanceInfo, setDistanceInfo] = useState<{
-    distance: number;
-    isLocal: boolean;
-  } | null>(null);
-  const [distanceLoading, setDistanceLoading] = useState(false);
-  const geocodeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  // ── Location dialog ──
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+  const [locationInput, setLocationInput] = useState('');
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationPrompted, setLocationPrompted] = useState(false);
 
   // ── Product unit selections ──
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
@@ -313,6 +315,15 @@ export default function StoreFront() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // ── Auto‑open location dialog on first visit ──
+  useEffect(() => {
+    if (!loading && !userLocation && !locationPrompted) {
+      setLocationPrompted(true);
+      setLocationDialogOpen(true);
+      toast.info('Please set your delivery location to place orders.');
+    }
+  }, [loading, userLocation, locationPrompted]);
 
   // ── Filtered products ──
   const filteredProducts = useMemo(() => {
@@ -375,33 +386,30 @@ export default function StoreFront() {
   // ── Cart totals ──
   const cartTotal = getCartTotal();
   const cartCount = getCartCount();
-  const minOrderRemaining = Math.max(0, effectiveMinOrder - cartTotal);
+  const minOrderRemaining = getMinOrderRemaining();
   const deliveryCharge = cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
   const grandTotal = cartTotal + deliveryCharge;
 
-  // ── Location-based min order logic ──
-  const checkDistance = useCallback(async (address: string) => {
-    if (!address || address.length < 5) {
-      setDistanceInfo(null);
+  // ── Location functions ──
+  const updateLocationAndMinOrder = useCallback(async (address: string) => {
+    if (!address || address.length < 3) {
+      setUserLocation(null);
       setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+      toast.info('Location cleared');
       return;
     }
 
-    setDistanceLoading(true);
+    setLocationLoading(true);
     try {
-      // 1. Geocode address using Google Geocoding API (client-side)
-      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
-      const geoRes = await fetch(geocodeUrl);
+      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+      const geoRes = await fetch(geoUrl);
       const geoData = await geoRes.json();
       if (!geoData.results || geoData.results.length === 0) {
-        toast.error('Could not locate this address. Please check it.');
-        setDistanceInfo(null);
-        setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+        toast.error('Could not find this address. Please check it.');
         return;
       }
       const { lat, lng } = geoData.results[0].geometry.location;
 
-      // 2. Call our distance API
       const distRes = await fetch('/api/distance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -409,45 +417,75 @@ export default function StoreFront() {
       });
       const distData = await distRes.json();
       if (distRes.ok) {
-        setDistanceInfo({ distance: distData.distance, isLocal: distData.isLocal });
-        setEffectiveMinOrder(distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER);
-        if (distData.isLocal) {
-          toast.success(`✅ Local delivery! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km from Khidirpur)`);
-        } else {
-          toast.info(`📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km from Khidirpur)`);
-        }
+        const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
+        setUserLocation(address);
+        setEffectiveMinOrder(minOrder);
+        toast.success(
+          distData.isLocal
+            ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+            : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+        );
+        setLocationDialogOpen(false);
       } else {
-        toast.error('Could not calculate distance. Using standard min order.');
-        setDistanceInfo(null);
-        setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+        toast.error('Could not calculate distance. Please try again.');
       }
-    } catch (err) {
-      console.error('Distance check error:', err);
-      toast.error('Failed to check location. Default min order applies.');
-      setDistanceInfo(null);
-      setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+    } catch (error) {
+      console.error('Location error:', error);
+      toast.error('Failed to set location');
     } finally {
-      setDistanceLoading(false);
+      setLocationLoading(false);
     }
-  }, []);
+  }, [setUserLocation, setEffectiveMinOrder]);
 
-  // ── Debounce address changes ──
-  useEffect(() => {
-    if (geocodeDebounceRef.current) {
-      clearTimeout(geocodeDebounceRef.current);
+  const detectLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser.');
+      return;
     }
-    geocodeDebounceRef.current = setTimeout(() => {
-      if (deliveryForm.address) {
-        checkDistance(deliveryForm.address);
-      } else {
-        setDistanceInfo(null);
-        setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const distRes = await fetch('/api/distance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: latitude, lng: longitude }),
+          });
+          const distData = await distRes.json();
+          if (distRes.ok) {
+            const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
+            setUserLocation(`📍 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            setEffectiveMinOrder(minOrder);
+            toast.success(
+              distData.isLocal
+                ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+                : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+            );
+            setLocationDialogOpen(false);
+          } else {
+            toast.error('Could not calculate distance.');
+          }
+        } catch (error) {
+          console.error('Distance error:', error);
+          toast.error('Failed to get location');
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      (err) => {
+        toast.error('Unable to access location. Please allow location permissions.');
+        setLocationLoading(false);
       }
-    }, 800);
-    return () => {
-      if (geocodeDebounceRef.current) clearTimeout(geocodeDebounceRef.current);
-    };
-  }, [deliveryForm.address, checkDistance]);
+    );
+  }, [setUserLocation, setEffectiveMinOrder]);
+
+  const clearLocation = useCallback(() => {
+    setUserLocation(null);
+    setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+    toast.info('Location removed');
+    setLocationDialogOpen(true);
+  }, [setUserLocation, setEffectiveMinOrder]);
 
   // ── Add to cart ──
   const handleAddToCart = (product: Product) => {
@@ -481,8 +519,14 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order (Razorpay only) ──
+  // ── Place order ──
   const handlePlaceOrder = async () => {
+    if (!userLocation) {
+      toast.error('Please set your delivery location first.');
+      setLocationDialogOpen(true);
+      return;
+    }
+
     if (!isAuthenticated) {
       toast.error('Please sign in to place an order');
       signIn('google');
@@ -582,8 +626,6 @@ export default function StoreFront() {
             setCheckoutOpen(false);
             setCheckoutStep(1);
             setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
-            setDistanceInfo(null);
-            setEffectiveMinOrder(DEFAULT_MIN_ORDER);
             toast.success('Payment successful! Order placed.');
           } catch (err) {
             console.error('Verification error:', err);
@@ -657,10 +699,7 @@ export default function StoreFront() {
   );
 
   // ──────────────────────────────────────────────────────
-  // RENDER (only the changed parts are shown fully)
-  // For brevity, I'm keeping the structure identical,
-  // but the cart sheet and checkout dialog are updated below.
-  // I'll include the complete return with the modified sections.
+  // RENDER
   // ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-white overflow-x-hidden w-full">
@@ -710,8 +749,9 @@ export default function StoreFront() {
               </div>
             </div>
 
-            {/* Right Actions – unchanged */}
+            {/* Right Actions */}
             <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+              {/* Language Switcher */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="hidden sm:flex gap-1 text-gray-600 hover:text-gray-900">
@@ -736,6 +776,21 @@ export default function StoreFront() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* ===== LOCATION BUTTON ===== */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative text-gray-600 hover:text-[#8D6E63] h-9 w-9 sm:h-10 sm:w-10"
+                onClick={() => setLocationDialogOpen(true)}
+                aria-label="Set delivery location"
+              >
+                <MapPinIcon className="w-5 h-5" />
+                {userLocation && (
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border border-white" />
+                )}
+              </Button>
+
+              {/* Cart Button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -750,6 +805,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
+              {/* User / Auth */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -790,6 +846,7 @@ export default function StoreFront() {
                 </Button>
               )}
 
+              {/* Mobile Hamburger */}
               <Button variant="ghost" size="icon" className="md:hidden text-gray-600 h-9 w-9" onClick={() => setMobileMenuOpen(true)}>
                 <Menu className="w-5 h-5" />
               </Button>
@@ -816,7 +873,7 @@ export default function StoreFront() {
         </div>
       </header>
 
-      {/* Mobile Menu Sheet – unchanged */}
+      {/* ============ MOBILE MENU SHEET ============ */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="sr-only">
@@ -830,7 +887,6 @@ export default function StoreFront() {
               <span className="text-lg font-bold text-[#8D6E63]">{t('storeName', language)}</span>
             </div>
             <Separator className="mb-4" />
-            {/* Language */}
             <div className="mb-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('language', language)}</p>
               <div className="flex gap-2">
@@ -885,8 +941,97 @@ export default function StoreFront() {
         </SheetContent>
       </Sheet>
 
-      {/* ============ HERO SECTION (unchanged) ============ */}
+      {/* ============ LOCATION DIALOG ============ */}
+      <Dialog
+        open={locationDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !userLocation) {
+            toast.warning('Please set your delivery location to continue.');
+            setTimeout(() => setLocationDialogOpen(true), 300);
+            return;
+          }
+          setLocationDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPinIcon className="w-5 h-5 text-[#8D6E63]" />
+              Set your delivery location
+            </DialogTitle>
+            <DialogDescription>
+              {userLocation
+                ? 'Your location is set. You can change it here.'
+                : '📍 Please enter your address or use your current location. This is required to place orders.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="location-input">Delivery Address</Label>
+              <Input
+                id="location-input"
+                placeholder="e.g., 123 Main Street, Kolkata"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                disabled={locationLoading}
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="default"
+                className="flex-1 bg-[#8D6E63] hover:bg-[#8D6E63]/90"
+                onClick={() => updateLocationAndMinOrder(locationInput)}
+                disabled={!locationInput.trim() || locationLoading}
+              >
+                {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save Address
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={detectLocation}
+                disabled={locationLoading}
+              >
+                {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Detect my location
+              </Button>
+            </div>
+            {userLocation && (
+              <div className="flex items-center justify-between text-sm text-gray-500 border-t pt-3 mt-2">
+                <span className="truncate">📍 {userLocation}</span>
+                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={clearLocation}>
+                  <X className="w-3 h-3 mr-1" /> Remove
+                </Button>
+              </div>
+            )}
+            <div className="text-xs text-gray-400">
+              {effectiveMinOrder !== DEFAULT_MIN_ORDER ? (
+                <span className="text-green-600 font-medium">Min order: ₹{effectiveMinOrder} (local)</span>
+              ) : (
+                <span>Min order: ₹{DEFAULT_MIN_ORDER} (standard)</span>
+              )}
+            </div>
+            {!userLocation && (
+              <p className="text-xs text-red-500">
+                ⚠️ You must set a location before placing an order.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            {userLocation ? (
+              <Button variant="ghost" onClick={() => setLocationDialogOpen(false)}>Close</Button>
+            ) : (
+              <Button variant="ghost" disabled className="text-gray-400 cursor-not-allowed">
+                Please set a location first
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1 w-full">
+        {/* ============ HERO ============ */}
         <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none bg-[#D7CCC8] overflow-hidden">
           <AnimatePresence mode="sync">
             <motion.div
@@ -957,7 +1102,7 @@ export default function StoreFront() {
           </div>
         </section>
 
-        {/* ============ CATEGORY BAR (unchanged) ============ */}
+        {/* ============ CATEGORY BAR ============ */}
         <section className="border-b border-gray-100 bg-white sticky top-14 sm:top-16 z-40">
           <div className="max-w-7xl mx-auto">
             <div
@@ -1048,7 +1193,7 @@ export default function StoreFront() {
           </div>
         </section>
 
-        {/* ============ MIN ORDER REMINDER (updated with effective min order) ============ */}
+        {/* ============ MIN ORDER REMINDER ============ */}
         {cartCount > 0 && minOrderRemaining > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -1057,17 +1202,17 @@ export default function StoreFront() {
           >
             <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2">
               <p className="text-xs sm:text-sm text-[#8D6E63] text-center">
-                🛒 {distanceInfo && <span>📍 {distanceInfo.distance.toFixed(1)} km – </span>}
+                🛒 {userLocation && <span>📍 {userLocation} – </span>}
                 {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
-                {distanceInfo && distanceInfo.isLocal && (
-                  <span className="ml-1 text-green-600 font-medium">(Local ₹{LOCAL_MIN_ORDER})</span>
+                {effectiveMinOrder !== DEFAULT_MIN_ORDER && (
+                  <span className="ml-1 text-green-600 font-medium">(Local ₹{effectiveMinOrder})</span>
                 )}
               </p>
             </div>
           </motion.div>
         )}
 
-        {/* ============ PRODUCT SECTION (unchanged) ============ */}
+        {/* ============ PRODUCT SECTION ============ */}
         <section id="product-section" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
           {loading && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
@@ -1139,7 +1284,7 @@ export default function StoreFront() {
             </div>
           )}
 
-          {/* Filtered view: single category / subcategory selected */}
+          {/* Filtered view */}
           {!loading && !error && !isBrowseAllView && (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -1166,7 +1311,7 @@ export default function StoreFront() {
         </section>
       </main>
 
-      {/* ============ FOOTER (unchanged) ============ */}
+      {/* ============ FOOTER ============ */}
       <footer className="bg-gray-900 text-gray-300 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -1241,7 +1386,7 @@ export default function StoreFront() {
         </div>
       </footer>
 
-      {/* ============ CART SHEET (updated with min order) ============ */}
+      {/* ============ CART SHEET ============ */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col h-full max-h-screen">
           <SheetHeader className="px-4 sm:px-6 pt-6 pb-3 border-b shrink-0">
@@ -1288,13 +1433,28 @@ export default function StoreFront() {
               </div>
 
               <div className="border-t bg-gray-50 px-4 sm:px-6 py-4 space-y-3 shrink-0">
-                {minOrderRemaining > 0 && (
+                {!userLocation && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-center">
+                    <p className="text-xs text-red-600">
+                      ⚠️ Please set your delivery location to place an order.
+                    </p>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-[#8D6E63] p-0 h-auto text-xs"
+                      onClick={() => setLocationDialogOpen(true)}
+                    >
+                      Set location now
+                    </Button>
+                  </div>
+                )}
+
+                {userLocation && minOrderRemaining > 0 && (
                   <div className="bg-[#FFB300]/10 border border-[#FFB300]/30 rounded-lg p-2.5">
                     <p className="text-xs text-[#8D6E63] text-center">
-                      ⚠️ {distanceInfo && <span>📍 {distanceInfo.distance.toFixed(1)} km – </span>}
-                      {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
-                      {distanceInfo && distanceInfo.isLocal && (
-                        <span className="ml-1 text-green-600 font-medium">(Local ₹{LOCAL_MIN_ORDER})</span>
+                      ⚠️ {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
+                      {effectiveMinOrder !== DEFAULT_MIN_ORDER && (
+                        <span className="ml-1 text-green-600 font-medium">(Local ₹{effectiveMinOrder})</span>
                       )}
                     </p>
                   </div>
@@ -1325,14 +1485,14 @@ export default function StoreFront() {
                     <span>{t('total', language)}</span>
                     <span>{formatPrice(grandTotal)}</span>
                   </div>
-                  {distanceInfo && (
+                  {userLocation && (
                     <div className="text-[11px] text-gray-500 flex items-center justify-between">
-                      <span>📍 Distance from Khidirpur</span>
-                      <span className="font-medium">{distanceInfo.distance.toFixed(1)} km</span>
+                      <span>📍 Location</span>
+                      <span className="font-medium truncate ml-2">{userLocation}</span>
                     </div>
                   )}
                   <div className="text-[11px] text-gray-500 flex items-center justify-between">
-                    <span>Minimum order for this location</span>
+                    <span>Minimum order</span>
                     <span className="font-medium text-[#8D6E63]">₹{effectiveMinOrder}</span>
                   </div>
                 </div>
@@ -1340,8 +1500,13 @@ export default function StoreFront() {
                 <Button
                   className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                   size="lg"
-                  disabled={cartTotal < effectiveMinOrder}
+                  disabled={cartTotal < effectiveMinOrder || !userLocation}
                   onClick={() => {
+                    if (!userLocation) {
+                      toast.error('Please set your delivery location first.');
+                      setLocationDialogOpen(true);
+                      return;
+                    }
                     if (!isAuthenticated) {
                       toast.error('Please sign in to continue to checkout');
                       signIn('google');
@@ -1352,13 +1517,15 @@ export default function StoreFront() {
                     setCheckoutOpen(true);
                   }}
                 >
-                  {cartTotal < effectiveMinOrder
-                    ? `${t('checkout', language)} (₹${effectiveMinOrder})`
-                    : !isAuthenticated
-                      ? 'Sign in to Checkout'
-                      : t('checkout', language)}
+                  {!userLocation
+                    ? 'Set Location to Checkout'
+                    : cartTotal < effectiveMinOrder
+                      ? `${t('checkout', language)} (₹${effectiveMinOrder})`
+                      : !isAuthenticated
+                        ? 'Sign in to Checkout'
+                        : t('checkout', language)}
                 </Button>
-                {!isAuthenticated && cartTotal >= effectiveMinOrder && (
+                {!isAuthenticated && cartTotal >= effectiveMinOrder && userLocation && (
                   <p className="text-xs text-gray-500 text-center">
                     You need to sign in before placing an order.
                   </p>
@@ -1369,7 +1536,7 @@ export default function StoreFront() {
         </SheetContent>
       </Sheet>
 
-      {/* ============ CHECKOUT DIALOG (updated with location info) ============ */}
+      {/* ============ CHECKOUT DIALOG ============ */}
       <Dialog
         open={checkoutOpen}
         onOpenChange={(open) => {
@@ -1431,21 +1598,6 @@ export default function StoreFront() {
                     onChange={(e) => setDeliveryForm((f) => ({ ...f, address: e.target.value }))}
                     rows={3}
                   />
-                  {distanceLoading && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Checking distance...
-                    </div>
-                  )}
-                  {distanceInfo && !distanceLoading && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <MapPin className="w-3 h-3 text-[#8D6E63]" />
-                      <span>
-                        {distanceInfo.distance.toFixed(1)} km from Khidirpur – min order: ₹{effectiveMinOrder}
-                        {distanceInfo.isLocal && <span className="ml-1 text-green-600 font-medium">(Local)</span>}
-                      </span>
-                    </div>
-                  )}
                 </div>
                 <div className="w-full sm:w-1/2">
                   <div className="space-y-2">
@@ -1457,6 +1609,12 @@ export default function StoreFront() {
                   <Label htmlFor="notes">Order Notes</Label>
                   <Textarea id="notes" placeholder="Any special instructions" value={deliveryForm.notes} onChange={(e) => setDeliveryForm((f) => ({ ...f, notes: e.target.value }))} rows={2} />
                 </div>
+                {userLocation && (
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <MapPinIcon className="w-3 h-3" />
+                    <span>Location set: {userLocation} – min order ₹{effectiveMinOrder}</span>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -1487,10 +1645,8 @@ export default function StoreFront() {
                     <p className="text-gray-500">{deliveryForm.address}</p>
                     {deliveryForm.pincode && <p className="text-gray-500">Pincode: {deliveryForm.pincode}</p>}
                     {deliveryForm.notes && <p className="text-gray-400 italic">{deliveryForm.notes}</p>}
-                    {distanceInfo && (
-                      <p className="text-xs text-gray-500">
-                        📍 {distanceInfo.distance.toFixed(1)} km from Khidirpur – min order: ₹{effectiveMinOrder}
-                      </p>
+                    {userLocation && (
+                      <p className="text-xs text-gray-500">📍 {userLocation}</p>
                     )}
                   </div>
                 </div>
@@ -1530,7 +1686,7 @@ export default function StoreFront() {
                     <span>{formatPrice(grandTotal)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-500">
-                    <span>Minimum order for this location</span>
+                    <span>Minimum order</span>
                     <span className="font-medium">₹{effectiveMinOrder}</span>
                   </div>
                 </div>
@@ -1569,7 +1725,7 @@ export default function StoreFront() {
               <Button
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={handlePlaceOrder}
-                disabled={razorpayLoading || cartTotal < effectiveMinOrder}
+                disabled={razorpayLoading || cartTotal < effectiveMinOrder || !userLocation}
               >
                 {razorpayLoading ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing</>
@@ -1582,7 +1738,7 @@ export default function StoreFront() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ ORDER SUCCESS (unchanged) ============ */}
+      {/* ============ ORDER SUCCESS ============ */}
       <Dialog open={!!orderSuccessData} onOpenChange={(open) => { if (!open) setOrderSuccessData(null); }}>
         <DialogContent className="max-w-sm w-[90vw] sm:w-full text-center p-6">
           <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 15, stiffness: 200 }}>
@@ -1603,7 +1759,7 @@ export default function StoreFront() {
   );
 }
 
-// ─── Product Card (unchanged) ────────────────────────────
+// ─── Product Card ────────────────────────────
 interface ProductCardProps {
   product: Product;
   language: Language;
