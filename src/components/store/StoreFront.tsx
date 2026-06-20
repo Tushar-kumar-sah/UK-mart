@@ -145,6 +145,12 @@ function getLocalName(item: { name: string; nameHi: string | null; nameBn: strin
   return item.name;
 }
 
+function getLocalDescription(item: { description: string; descriptionHi: string | null; descriptionBn: string | null }, lang: Language): string {
+  if (lang === 'hi' && item.descriptionHi) return item.descriptionHi;
+  if (lang === 'bn' && item.descriptionBn) return item.descriptionBn;
+  return item.description;
+}
+
 function getPastelColor(name: string): string {
   return PASTEL_COLORS[name.length % PASTEL_COLORS.length];
 }
@@ -1482,17 +1488,45 @@ interface ProductCardProps {
 }
 
 function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, customWeight, onUnitChange, onQtyChange, onCustomWeightChange, onAddToCart }: ProductCardProps) {
-  const availableUnits: string[] = (() => {
-    try { return JSON.parse(product.availableUnits); } catch { return [product.baseUnit]; }
+  const rawAvailableUnits: string[] = (() => {
+    try {
+      const parsed = JSON.parse(product.availableUnits);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [product.baseUnit];
+    } catch { return [product.baseUnit]; }
   })();
 
-  const isCustom = selectedUnit === 'custom';
+  // Guard against bad admin data: a "Piece" product (single packaged item like a shampoo
+  // pouch, soap bar, bottle, etc.) should never offer gram/kg/ml/L style units — those only
+  // make sense for bulk weight/volume products. If the admin panel accidentally saved weight
+  // values for a Piece item, strip them out here so the storefront never shows them.
+  const WEIGHT_VOLUME_PATTERN = /^\s*\d+(\.\d+)?\s*(g|gm|gms|kg|ml|l|litre|liter)\s*$/i;
+  const availableUnits: string[] =
+    product.unitType === 'piece'
+      ? (() => {
+          const cleaned = rawAvailableUnits.filter((u) => !WEIGHT_VOLUME_PATTERN.test(u));
+          return cleaned.length > 0 ? cleaned : [product.baseUnit];
+        })()
+      : rawAvailableUnits;
+
+  // Items that only ever come in ONE fixed pack/size (e.g. a shampoo pouch, a bar of soap,
+  // a single packaged product) shouldn't show a unit-picker or "custom weight" option —
+  // that UI only makes sense for bulk items sold by weight/volume (dal, rice, masala, dry fruits)
+  // or items genuinely available in multiple pack sizes. Customers can still buy more than one
+  // using the quantity stepper below.
+  // NOTE: we key this off `availableUnits.length <= 1` only — NOT `unitType` — because many
+  // single-pack items (shampoo, soap, etc.) are still tagged unitType "weight" in the admin
+  // panel/DB even though they should never show a gram/kg custom-weight picker.
+  const isSingleFixedItem = availableUnits.length <= 1;
+
+  const isCustom = !isSingleFixedItem && selectedUnit === 'custom';
+  const effectiveUnit = isSingleFixedItem ? (availableUnits[0] || product.baseUnit) : selectedUnit;
   const displayUnit = isCustom && customWeight
     ? formatCustomWeight(customWeight, product.unitType)
-    : selectedUnit;
+    : effectiveUnit;
   const unitPrice = displayUnit ? calculatePrice(product.basePrice, product.baseUnit, displayUnit) : 0;
   const pastelColor = getPastelColor(product.name);
   const displayName = getLocalName(product, language);
+  const displayDescription = getLocalDescription(product, language);
   const initial = product.name.charAt(0).toUpperCase();
 
   const inStock = product.stock > 0;
@@ -1535,25 +1569,37 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
             {displayName}
           </h3>
 
+          {displayDescription && (
+            <p className="text-[10px] sm:text-[11px] text-gray-500 line-clamp-2 leading-snug">
+              {displayDescription}
+            </p>
+          )}
+
           <p className="text-[11px] sm:text-xs text-gray-400">
             {formatPrice(product.basePrice)} {t('per', language)} {product.baseUnit}
           </p>
 
-          <Select value={selectedUnit} onValueChange={onUnitChange}>
-            <SelectTrigger className="h-7 text-xs bg-gray-50 border-gray-200">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableUnits.map((unit) => (
-                <SelectItem key={unit} value={unit} className="text-xs">
-                  {unit} — {formatPrice(calculatePrice(product.basePrice, product.baseUnit, unit))}
+          {isSingleFixedItem ? (
+            <div className="h-7 flex items-center px-2.5 text-xs bg-gray-50 border border-gray-200 rounded-md text-gray-600 font-medium">
+              {availableUnits[0] || product.baseUnit}
+            </div>
+          ) : (
+            <Select value={selectedUnit} onValueChange={onUnitChange}>
+              <SelectTrigger className="h-7 text-xs bg-gray-50 border-gray-200">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableUnits.map((unit) => (
+                  <SelectItem key={unit} value={unit} className="text-xs">
+                    {unit} — {formatPrice(calculatePrice(product.basePrice, product.baseUnit, unit))}
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom" className="text-xs font-medium text-[#8D6E63] bg-[#D7CCC8]/50">
+                  ✏️ Custom weight...
                 </SelectItem>
-              ))}
-              <SelectItem value="custom" className="text-xs font-medium text-[#8D6E63] bg-[#D7CCC8]/50">
-                ✏️ Custom weight...
-              </SelectItem>
-            </SelectContent>
-          </Select>
+              </SelectContent>
+            </Select>
+          )}
 
           {isCustom && (
             <div className="space-y-1">
