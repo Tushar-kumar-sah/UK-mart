@@ -1549,28 +1549,10 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
             }
           </p>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 mt-auto pt-1">
-            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden shrink-0">
-              <button
-                onClick={() => onQtyChange(Math.max(1, selectedQty - 1))}
-                className="w-6 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
-              >
-                <Minus className="w-3 h-3" />
-              </button>
-              <span className="w-6 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-xs font-medium text-gray-700 border-x border-gray-200">
-                {selectedQty}
-              </span>
-              <button
-                onClick={() => onQtyChange(selectedQty + 1)}
-                className="w-6 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 mt-auto pt-1">
             <Button
               size="sm"
-              className={`flex-1 h-7 sm:h-8 text-[11px] sm:text-xs font-medium transition-all px-1.5 sm:px-3 ${
+              className={`w-full sm:flex-1 h-8 text-xs font-medium transition-all order-1 sm:order-2 ${
                 isAdded
                   ? 'bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/20'
                   : isCustom
@@ -1586,6 +1568,24 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
                 <><ShoppingCart className="w-3 h-3 mr-1 shrink-0" /> <span className="truncate">{t('addToCart', language)}</span></>
               )}
             </Button>
+
+            <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden shrink-0 self-center order-2 sm:order-1">
+              <button
+                onClick={() => onQtyChange(Math.max(1, selectedQty - 1))}
+                className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+              <span className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-xs font-medium text-gray-700 border-x border-gray-200">
+                {selectedQty}
+              </span>
+              <button
+                onClick={() => onQtyChange(selectedQty + 1)}
+                className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>
