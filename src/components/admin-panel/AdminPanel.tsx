@@ -83,7 +83,7 @@ import {
 } from 'recharts';
 
 // ============================================================
-// Types
+// Types (unchanged – all the interfaces)
 // ============================================================
 
 interface DashboardData {
@@ -210,7 +210,7 @@ interface AIAnalysis {
 type Section = 'dashboard' | 'products' | 'categories' | 'stock' | 'offers' | 'orders' | 'users' | 'ai-analyzer';
 
 // ============================================================
-// Constants
+// Constants (unchanged)
 // ============================================================
 const CHART_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308'];
 
@@ -258,11 +258,9 @@ export default function AdminPanel() {
   // ALL HOOKS – MUST BE BEFORE ANY EARLY RETURN
   // ============================================================
 
-  // Navigation state
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Data states
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -273,7 +271,6 @@ export default function AdminPanel() {
   const [aiResult, setAiResult] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Loading states
   const [loading, setLoading] = useState<Record<Section, boolean>>({
     dashboard: false,
     products: false,
@@ -285,7 +282,6 @@ export default function AdminPanel() {
     'ai-analyzer': false,
   });
 
-  // Dialog states
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -299,7 +295,7 @@ export default function AdminPanel() {
   const [editStockValue, setEditStockValue] = useState<number>(0);
 
   // ============================================================
-  // API callbacks
+  // API callbacks – with array safety and error toasts
   // ============================================================
   const setLoadingFor = useCallback((section: Section, value: boolean) => {
     setLoading((prev) => ({ ...prev, [section]: value }));
@@ -312,9 +308,12 @@ export default function AdminPanel() {
       if (res.ok) {
         const data = await res.json();
         setDashboardData(data);
+      } else {
+        toast.error('Failed to load dashboard');
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('dashboard', false);
     }
@@ -326,10 +325,13 @@ export default function AdminPanel() {
       const res = await fetch('/api/products');
       if (res.ok) {
         const data = await res.json();
-        setProducts(data);
+        setProducts(Array.isArray(data) ? data : []);
+      } else {
+        toast.error('Failed to load products');
       }
     } catch (err) {
       console.error('Failed to fetch products:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('products', false);
     }
@@ -341,10 +343,13 @@ export default function AdminPanel() {
       const res = await fetch('/api/categories');
       if (res.ok) {
         const data = await res.json();
-        setCategories(data);
+        setCategories(Array.isArray(data) ? data : []);
+      } else {
+        toast.error('Failed to load categories');
       }
     } catch (err) {
       console.error('Failed to fetch categories:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('categories', false);
     }
@@ -356,10 +361,13 @@ export default function AdminPanel() {
       const res = await fetch('/api/stock');
       if (res.ok) {
         const data = await res.json();
-        setLowStockItems(data);
+        setLowStockItems(Array.isArray(data) ? data : []);
+      } else {
+        toast.error('Failed to load stock data');
       }
     } catch (err) {
       console.error('Failed to fetch stock:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('stock', false);
     }
@@ -371,10 +379,13 @@ export default function AdminPanel() {
       const res = await fetch('/api/offers');
       if (res.ok) {
         const data = await res.json();
-        setOffers(data);
+        setOffers(Array.isArray(data) ? data : []);
+      } else {
+        toast.error('Failed to load offers');
       }
     } catch (err) {
       console.error('Failed to fetch offers:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('offers', false);
     }
@@ -387,9 +398,12 @@ export default function AdminPanel() {
       if (res.ok) {
         const data = await res.json();
         setOrders(data.orders || data);
+      } else {
+        toast.error('Failed to load orders');
       }
     } catch (err) {
       console.error('Failed to fetch orders:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('orders', false);
     }
@@ -401,10 +415,13 @@ export default function AdminPanel() {
       const res = await fetch('/api/users');
       if (res.ok) {
         const data = await res.json();
-        setUsers(data);
+        setUsers(Array.isArray(data) ? data : []);
+      } else {
+        toast.error('Failed to load users');
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
+      toast.error('Network error');
     } finally {
       setLoadingFor('users', false);
     }
@@ -444,7 +461,6 @@ export default function AdminPanel() {
     [fetchDashboard, fetchProducts, fetchCategories, fetchStock, fetchOffers, fetchOrders, fetchUsers]
   );
 
-  // Effects
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
@@ -505,7 +521,7 @@ export default function AdminPanel() {
   }
 
   // ============================================================
-  // ADMIN PANEL RENDER (only when authenticated as admin)
+  // ADMIN PANEL RENDER
   // ============================================================
 
   const navItems: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -565,7 +581,7 @@ export default function AdminPanel() {
   );
 
   // ============================================================
-  // RENDER: Dashboard
+  // RENDER: Dashboard (unchanged – already works)
   // ============================================================
   const renderDashboard = () => {
     if (!dashboardData) {
@@ -746,7 +762,7 @@ export default function AdminPanel() {
   };
 
   // ============================================================
-  // RENDER: Products Management
+  // RENDER: Products (unchanged)
   // ============================================================
   const renderProducts = () => (
     <div className="space-y-6">
@@ -869,7 +885,7 @@ export default function AdminPanel() {
   );
 
   // ============================================================
-  // RENDER: Categories Management
+  // RENDER: Categories (unchanged)
   // ============================================================
   const renderCategories = () => (
     <div className="space-y-6">
@@ -1058,233 +1074,240 @@ export default function AdminPanel() {
   );
 
   // ============================================================
-  // RENDER: Stock Management
+  // RENDER: Stock Management (now works)
   // ============================================================
-  const renderStock = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-2xl font-bold">Stock Management</h2>
-          <p className="text-sm text-muted-foreground">
-            {lowStockItems.length} products with stock ≤ 50
-          </p>
+  const renderStock = () => {
+    // Ensure it's an array
+    const items = Array.isArray(lowStockItems) ? lowStockItems : [];
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-2xl font-bold">Stock Management</h2>
+            <p className="text-sm text-muted-foreground">
+              {items.length} products with stock ≤ 50
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchStock} disabled={loading.stock}>
+            <RefreshCw className={`size-4 mr-1 ${loading.stock ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchStock} disabled={loading.stock}>
-          <RefreshCw className={`size-4 mr-1 ${loading.stock ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
 
-      <Card className="border shadow-none">
-        <CardContent className="p-0">
-          <div className="max-h-150 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Current Stock</TableHead>
-                  <TableHead>Unit Type</TableHead>
-                  <TableHead className="text-right">Update Stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lowStockItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell>{item.category?.name || '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant={item.stock <= 5 ? 'destructive' : 'outline'}>
-                        {item.stock}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{item.unitType}</TableCell>
-                    <TableCell className="text-right">
-                      {editingStockId === item.id ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <Input
-                            type="number"
-                            value={editStockValue}
-                            onChange={(e) => setEditStockValue(Number(e.target.value))}
-                            className="w-24 h-8 text-sm"
-                            min={0}
-                          />
+        <Card className="border shadow-none">
+          <CardContent className="p-0">
+            <div className="max-h-150 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Current Stock</TableHead>
+                    <TableHead>Unit Type</TableHead>
+                    <TableHead className="text-right">Update Stock</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>{item.category?.name || '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.stock <= 5 ? 'destructive' : 'outline'}>
+                          {item.stock}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{item.unitType}</TableCell>
+                      <TableCell className="text-right">
+                        {editingStockId === item.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Input
+                              type="number"
+                              value={editStockValue}
+                              onChange={(e) => setEditStockValue(Number(e.target.value))}
+                              className="w-24 h-8 text-sm"
+                              min={0}
+                            />
+                            <Button
+                              size="sm"
+                              className="h-8"
+                              onClick={async () => {
+                                await fetch('/api/products', {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: item.id, stock: editStockValue }),
+                                });
+                                setEditingStockId(null);
+                                fetchStock();
+                              }}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => setEditingStockId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
                           <Button
+                            variant="outline"
                             size="sm"
                             className="h-8"
-                            onClick={async () => {
-                              await fetch('/api/products', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: item.id, stock: editStockValue }),
-                              });
-                              setEditingStockId(null);
-                              fetchStock();
+                            onClick={() => {
+                              setEditingStockId(item.id);
+                              setEditStockValue(item.stock);
                             }}
                           >
-                            Save
+                            <Pencil className="size-3 mr-1" />
+                            Edit
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {items.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        All products have sufficient stock
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // ============================================================
+  // RENDER: Offers Management (now works)
+  // ============================================================
+  const renderOffers = () => {
+    const items = Array.isArray(offers) ? offers : [];
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-2xl font-bold">Offers</h2>
+            <p className="text-sm text-muted-foreground">{items.length} offers total</p>
+          </div>
+          <Button
+            onClick={() => {
+              setEditingOffer(null);
+              setOfferDialogOpen(true);
+            }}
+          >
+            <Plus className="size-4 mr-1" />
+            Add Offer
+          </Button>
+        </div>
+
+        <Card className="border shadow-none">
+          <CardContent className="p-0">
+            <div className="max-h-150 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Discount</TableHead>
+                    <TableHead>Min Order</TableHead>
+                    <TableHead>Max Discount</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((offer) => (
+                    <TableRow key={offer.id}>
+                      <TableCell>
+                        <div className="font-medium">{offer.name}</div>
+                        {offer.description && (
+                          <div className="text-xs text-muted-foreground line-clamp-1">
+                            {offer.description}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {offer.discountType === 'PERCENTAGE'
+                            ? `${offer.discountValue}%`
+                            : formatCurrency(offer.discountValue)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatCurrency(offer.minOrderAmount)}</TableCell>
+                      <TableCell>
+                        {offer.maxDiscount ? formatCurrency(offer.maxDiscount) : '—'}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(offer.startDate)} — {formatDate(offer.endDate)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={offer.isActive ? 'default' : 'secondary'}>
+                          {offer.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => {
+                              setEditingOffer(offer);
+                              setOfferDialogOpen(true);
+                            }}
+                          >
+                            <Pencil className="size-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="h-8"
-                            onClick={() => setEditingStockId(null)}
+                            size="icon"
+                            className="size-8 text-red-500"
+                            onClick={async () => {
+                              if (confirm('Delete this offer?')) {
+                                await fetch(`/api/offers?id=${offer.id}`, { method: 'DELETE' });
+                                fetchOffers();
+                              }
+                            }}
                           >
-                            Cancel
+                            <Trash2 className="size-3.5" />
                           </Button>
                         </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => {
-                            setEditingStockId(item.id);
-                            setEditStockValue(item.stock);
-                          }}
-                        >
-                          <Pencil className="size-3 mr-1" />
-                          Edit
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {lowStockItems.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      All products have sufficient stock
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {items.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No offers found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
 
-  // ============================================================
-  // RENDER: Offers Management
-  // ============================================================
-  const renderOffers = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-2xl font-bold">Offers</h2>
-          <p className="text-sm text-muted-foreground">{offers.length} offers total</p>
-        </div>
-        <Button
-          onClick={() => {
-            setEditingOffer(null);
-            setOfferDialogOpen(true);
-          }}
-        >
-          <Plus className="size-4 mr-1" />
-          Add Offer
-        </Button>
+        <OfferDialog
+          open={offerDialogOpen}
+          onOpenChange={setOfferDialogOpen}
+          offer={editingOffer}
+          onSaved={fetchOffers}
+        />
       </div>
-
-      <Card className="border shadow-none">
-        <CardContent className="p-0">
-          <div className="max-h-150 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Discount</TableHead>
-                  <TableHead>Min Order</TableHead>
-                  <TableHead>Max Discount</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {offers.map((offer) => (
-                  <TableRow key={offer.id}>
-                    <TableCell>
-                      <div className="font-medium">{offer.name}</div>
-                      {offer.description && (
-                        <div className="text-xs text-muted-foreground line-clamp-1">
-                          {offer.description}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {offer.discountType === 'PERCENTAGE'
-                          ? `${offer.discountValue}%`
-                          : formatCurrency(offer.discountValue)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatCurrency(offer.minOrderAmount)}</TableCell>
-                    <TableCell>
-                      {offer.maxDiscount ? formatCurrency(offer.maxDiscount) : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(offer.startDate)} — {formatDate(offer.endDate)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={offer.isActive ? 'default' : 'secondary'}>
-                        {offer.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => {
-                            setEditingOffer(offer);
-                            setOfferDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-red-500"
-                          onClick={async () => {
-                            if (confirm('Delete this offer?')) {
-                              await fetch(`/api/offers?id=${offer.id}`, { method: 'DELETE' });
-                              fetchOffers();
-                            }
-                          }}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {offers.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No offers found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <OfferDialog
-        open={offerDialogOpen}
-        onOpenChange={setOfferDialogOpen}
-        offer={editingOffer}
-        onSaved={fetchOffers}
-      />
-    </div>
-  );
+    );
+  };
 
   // ============================================================
-  // RENDER: Orders Management
+  // RENDER: Orders (unchanged – already has array safety)
   // ============================================================
   const renderOrders = () => {
     if (!Array.isArray(orders)) {
@@ -1499,7 +1522,7 @@ export default function AdminPanel() {
   };
 
   // ============================================================
-  // RENDER: Users Management
+  // RENDER: Users (unchanged)
   // ============================================================
   const renderUsers = () => (
     <div className="space-y-6">
@@ -1582,12 +1605,13 @@ export default function AdminPanel() {
   );
 
   // ============================================================
-  // RENDER: AI Analyzer
+  // RENDER: AI Analyzer (now works)
   // ============================================================
   const runAIAnalysis = async (type: 'sales_trend' | 'inventory' | 'customer_behavior') => {
     setAiLoading(true);
     setAiResult(null);
     try {
+      // Prepare data based on type
       let dataToSend: unknown;
       if (type === 'sales_trend') {
         dataToSend = {
@@ -1637,9 +1661,20 @@ export default function AdminPanel() {
       if (res.ok) {
         const analysis = await res.json();
         setAiResult(analysis);
+        toast.success('Analysis complete!');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'AI analysis failed');
+        setAiResult({
+          summary: 'Failed to complete analysis.',
+          insights: [{ title: 'Error', description: 'Could not reach AI service.' }],
+          recommendations: ['Check your connection', 'Try again later'],
+          metrics: {},
+        });
       }
     } catch (err) {
       console.error('AI analysis error:', err);
+      toast.error('Network error during AI analysis');
       setAiResult({
         summary: 'Failed to complete analysis.',
         insights: [{ title: 'Error', description: 'Could not reach AI service.' }],
@@ -1788,24 +1823,15 @@ export default function AdminPanel() {
   // ============================================================
   const renderSection = () => {
     switch (activeSection) {
-      case 'dashboard':
-        return renderDashboard();
-      case 'products':
-        return renderProducts();
-      case 'categories':
-        return renderCategories();
-      case 'stock':
-        return renderStock();
-      case 'offers':
-        return renderOffers();
-      case 'orders':
-        return renderOrders();
-      case 'users':
-        return renderUsers();
-      case 'ai-analyzer':
-        return renderAIAnalyzer();
-      default:
-        return null;
+      case 'dashboard': return renderDashboard();
+      case 'products': return renderProducts();
+      case 'categories': return renderCategories();
+      case 'stock': return renderStock();
+      case 'offers': return renderOffers();
+      case 'orders': return renderOrders();
+      case 'users': return renderUsers();
+      case 'ai-analyzer': return renderAIAnalyzer();
+      default: return null;
     }
   };
 
