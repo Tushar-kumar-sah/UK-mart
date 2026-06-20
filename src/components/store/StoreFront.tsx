@@ -237,6 +237,16 @@ export default function StoreFront() {
     };
   }, []);
 
+  // ── Hero banner carousel ──
+  const HERO_BANNERS = ['/banner.png', '/banner2.png', '/banner3.png'];
+  const [bannerIndex, setBannerIndex] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setBannerIndex((prev) => (prev + 1) % HERO_BANNERS.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ── Data state ──
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -386,6 +396,12 @@ export default function StoreFront() {
 
   // ── Place order (Razorpay only) ──
   const handlePlaceOrder = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to place an order');
+      signIn('google');
+      return;
+    }
+
     if (!deliveryForm.name || !deliveryForm.phone || !deliveryForm.address) {
       toast.error('Please fill all delivery details');
       return;
@@ -781,36 +797,67 @@ export default function StoreFront() {
       <main className="flex-1 w-full">
         {/* ============ HERO ============ */}
         <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none bg-[#D7CCC8] overflow-hidden">
-          <Image
-            src="/banner.png"
-            alt="Hero banner"
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-          />
-          <div className="absolute inset-0 bg-linear-to-r from-black/40 via-black/10 to-transparent hidden sm:block" />
-          <div className="absolute inset-0 bg-black/30 sm:hidden" />
+          <AnimatePresence mode="sync">
+            <motion.div
+              key={bannerIndex}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8, ease: 'easeInOut' }}
+              className="absolute inset-0"
+            >
+              <Image
+                src={HERO_BANNERS[bannerIndex]}
+                alt="Hero banner"
+                fill
+                priority={bannerIndex === 0}
+                className="object-cover"
+                sizes="100vw"
+              />
+            </motion.div>
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/30 to-black/10 sm:bg-linear-to-r sm:from-black/75 sm:via-black/45 sm:to-black/10" />
+
+          {/* Slide indicator dots */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+            {HERO_BANNERS.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setBannerIndex(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === bannerIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/75'
+                }`}
+              />
+            ))}
+          </div>
 
           <div className="relative z-10 max-w-7xl mx-auto px-4 xs:px-5 sm:px-8 md:px-14 flex items-center min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none">
             <motion.div
+              key={`text-${bannerIndex}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: 'easeOut' }}
-              className="max-w-[85%] xs:max-w-md md:max-w-lg"
+              className="max-w-[88%] xs:max-w-md md:max-w-lg"
             >
-              <span className="inline-block text-[10px] xs:text-xs font-semibold text-white/80 bg-black/30 backdrop-blur-sm px-3 xs:px-4 py-1 xs:py-1.5 rounded-full mb-3 xs:mb-4 tracking-wider uppercase">
+              <span className="inline-block text-[10px] xs:text-xs font-bold text-[#3a2a22] bg-[#FFB300] px-3 xs:px-4 py-1 xs:py-1.5 rounded-full mb-3 xs:mb-4 tracking-wider uppercase shadow-md">
                 {t('storeName', language)}
               </span>
-              <h1 className="text-xl xs:text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 xs:mb-3 sm:mb-4 leading-tight drop-shadow-lg">
+              <h1
+                className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-2 xs:mb-3 sm:mb-4 leading-[1.1]"
+                style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.45)' }}
+              >
                 {t('heroTitle', language)}
               </h1>
-              <p className="text-xs xs:text-sm sm:text-base text-white/90 mb-4 xs:mb-5 sm:mb-7 leading-relaxed drop-shadow-md max-w-sm">
+              <p
+                className="text-sm xs:text-base sm:text-lg text-white mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm font-medium"
+                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
+              >
                 {t('heroSubtitle', language)}
               </p>
               <Button
                 size="lg"
-                className="bg-white text-[#8D6E63] hover:bg-gray-100 rounded-full px-6 xs:px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-semibold text-sm sm:text-base"
+                className="bg-white text-[#5d4037] hover:bg-gray-100 rounded-full px-6 xs:px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-bold text-sm sm:text-base"
                 onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 {t('shopNow', language)}
@@ -1188,12 +1235,28 @@ export default function StoreFront() {
                   className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                   size="lg"
                   disabled={cartTotal < MIN_ORDER}
-                  onClick={() => { setCartOpen(false); setCheckoutStep(1); setCheckoutOpen(true); }}
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      toast.error('Please sign in to continue to checkout');
+                      signIn('google');
+                      return;
+                    }
+                    setCartOpen(false);
+                    setCheckoutStep(1);
+                    setCheckoutOpen(true);
+                  }}
                 >
                   {cartTotal < MIN_ORDER
                     ? `${t('checkout', language)} (₹${MIN_ORDER})`
-                    : t('checkout', language)}
+                    : !isAuthenticated
+                      ? 'Sign in to Checkout'
+                      : t('checkout', language)}
                 </Button>
+                {!isAuthenticated && cartTotal >= MIN_ORDER && (
+                  <p className="text-xs text-gray-500 text-center">
+                    You need to sign in before placing an order.
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -1201,7 +1264,18 @@ export default function StoreFront() {
       </Sheet>
 
       {/* ============ CHECKOUT DIALOG (Razorpay only) ============ */}
-      <Dialog open={checkoutOpen} onOpenChange={(open) => { setCheckoutOpen(open); if (!open) setCheckoutStep(1); }}>
+      <Dialog
+        open={checkoutOpen}
+        onOpenChange={(open) => {
+          if (open && !isAuthenticated) {
+            toast.error('Please sign in to continue to checkout');
+            signIn('google');
+            return;
+          }
+          setCheckoutOpen(open);
+          if (!open) setCheckoutStep(1);
+        }}
+      >
         <DialogContent className="max-w-lg w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto p-0">
           <div className="p-4 sm:p-6">
             <DialogHeader>
@@ -1450,7 +1524,7 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
             </div>
           )}
           {inStock && (
-            <Badge className="absolute top-2 right-2 bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/10 text-[10px]">
+            <Badge className="absolute top-2 right-2 bg-green-600 text-white hover:bg-green-600 text-[10px] font-semibold shadow-sm border-0">
               {t('inStock', language)}
             </Badge>
           )}
