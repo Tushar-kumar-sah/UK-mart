@@ -327,16 +327,45 @@ export default function StoreFront() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Auto‑open location dialog on first visit ──
+  // ── Location pop‑up after 7 seconds ──
   useEffect(() => {
     if (!loading && !userLocation && !locationPrompted) {
-      setLocationPrompted(true);
-      setLocationDialogOpen(true);
-      toast.info('Please set your delivery location to place orders.');
+      const timer = setTimeout(() => {
+        setLocationPrompted(true);
+        setLocationDialogOpen(true);
+        toast.info('Please set your delivery location to place orders.');
+      }, 7000);
+      return () => clearTimeout(timer);
     }
   }, [loading, userLocation, locationPrompted]);
 
-  // ── Filtered products – now shuffled ──
+  // ── Restore pending checkout after sign‑in ──
+  useEffect(() => {
+    const pending = sessionStorage.getItem('pendingCheckout');
+    if (pending === 'true' && isAuthenticated) {
+      // Restore cart
+      const savedCart = sessionStorage.getItem('pendingCart');
+      if (savedCart) {
+        const items = JSON.parse(savedCart) as CartItem[];
+        clearCart();
+        items.forEach((item) => addToCart(item));
+      }
+      // Restore delivery form
+      const savedDelivery = sessionStorage.getItem('pendingDeliveryForm');
+      if (savedDelivery) {
+        setDeliveryForm(JSON.parse(savedDelivery));
+      }
+      // Open checkout at step 3 (review)
+      setCheckoutStep(3);
+      setCheckoutOpen(true);
+      // Clear session storage to prevent loops
+      sessionStorage.removeItem('pendingCheckout');
+      sessionStorage.removeItem('pendingCart');
+      sessionStorage.removeItem('pendingDeliveryForm');
+    }
+  }, [isAuthenticated]);
+
+  // ── Filtered products (shuffled) ──
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
     if (selectedCategory) {
@@ -356,7 +385,6 @@ export default function StoreFront() {
           getLocalName(p.category, language).toLowerCase().includes(q)
       );
     }
-    // 🔀 Randomise the order each time the page loads / filter changes
     return shuffleArray(result);
   }, [products, selectedCategory, selectedSubcategory, searchQuery, language]);
 
@@ -372,7 +400,7 @@ export default function StoreFront() {
     return (cat?.children || []).filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   }, [categories, selectedCategory]);
 
-  // ── Products grouped by category – with random order per category ──
+  // ── Products grouped by category (shuffled per category) ──
   const productsByCategory = useMemo(() => {
     const activeProducts = products.filter((p) => p.isActive);
     const groups: { category: Category; items: Product[] }[] = [];
@@ -389,7 +417,6 @@ export default function StoreFront() {
         );
       }
       if (items.length > 0) {
-        // 🔀 Shuffle the items within this category
         groups.push({ category: cat, items: shuffleArray(items) });
       }
     }
@@ -543,8 +570,11 @@ export default function StoreFront() {
     }
 
     if (!isAuthenticated) {
-      toast.error('Please sign in to place an order');
-      signIn('google');
+      // ── Save pending data before redirecting to sign‑in ──
+      sessionStorage.setItem('pendingCheckout', 'true');
+      sessionStorage.setItem('pendingCart', JSON.stringify(cart));
+      sessionStorage.setItem('pendingDeliveryForm', JSON.stringify(deliveryForm));
+      signIn('google', { callbackUrl: window.location.pathname });
       return;
     }
 
@@ -641,6 +671,10 @@ export default function StoreFront() {
             setCheckoutOpen(false);
             setCheckoutStep(1);
             setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
+            // ── Clear pending session data ──
+            sessionStorage.removeItem('pendingCheckout');
+            sessionStorage.removeItem('pendingCart');
+            sessionStorage.removeItem('pendingDeliveryForm');
             toast.success('Payment successful! Order placed.');
           } catch (err) {
             console.error('Verification error:', err);
