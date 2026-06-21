@@ -29,7 +29,6 @@ import { toast } from 'sonner';
 import Image from 'next/image';
 
 // ─── Helpers ────────────────────────────────────────────
-// Fisher‑Yates shuffle – returns a new shuffled array
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -229,7 +228,6 @@ export default function StoreFront() {
     setEffectiveMinOrder,
   } = useStore();
 
-  // ── NextAuth session ──
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
@@ -355,7 +353,7 @@ export default function StoreFront() {
       if (savedDelivery) {
         setDeliveryForm(JSON.parse(savedDelivery));
       }
-      // Open checkout at step 3 (review)
+      // Open checkout at step 3 (review & pay)
       setCheckoutStep(3);
       setCheckoutOpen(true);
       // Clear session storage to prevent loops
@@ -570,7 +568,7 @@ export default function StoreFront() {
     }
 
     if (!isAuthenticated) {
-      // ── Save pending data before redirecting to sign‑in ──
+      // Save pending data before redirecting to sign‑in
       sessionStorage.setItem('pendingCheckout', 'true');
       sessionStorage.setItem('pendingCart', JSON.stringify(cart));
       sessionStorage.setItem('pendingDeliveryForm', JSON.stringify(deliveryForm));
@@ -671,7 +669,7 @@ export default function StoreFront() {
             setCheckoutOpen(false);
             setCheckoutStep(1);
             setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
-            // ── Clear pending session data ──
+            // Clear pending session data
             sessionStorage.removeItem('pendingCheckout');
             sessionStorage.removeItem('pendingCart');
             sessionStorage.removeItem('pendingDeliveryForm');
