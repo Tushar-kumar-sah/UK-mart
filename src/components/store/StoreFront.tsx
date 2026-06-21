@@ -72,6 +72,35 @@ interface Category {
   sortOrder: number;
 }
 
+interface Order {
+  id: string;
+  userId: string;
+  totalAmount: number;
+  discountAmount: number;
+  finalAmount: number;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  customerName: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  notes: string | null;
+  createdAt: string;
+  items: OrderItem[];
+  user: { id: string; name: string; email: string; phone: string } | null;
+}
+
+interface OrderItem {
+  id: string;
+  orderId: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  pricePerUnit: number;
+  totalPrice: number;
+}
+
 interface Offer {
   id: string;
   name: string;
@@ -293,6 +322,15 @@ export default function StoreFront() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationPrompted, setLocationPrompted] = useState(false);
 
+  // ── Delivery estimate ──
+  const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
+  const [isLocalDelivery, setIsLocalDelivery] = useState(false);
+
+  // ── Track orders dialog ──
+  const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
+  const [userOrders, setUserOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
   // ── Product unit selections ──
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
   const [selectedQtys, setSelectedQtys] = useState<Record<string, number>>({});
@@ -341,27 +379,47 @@ export default function StoreFront() {
   useEffect(() => {
     const pending = sessionStorage.getItem('pendingCheckout');
     if (pending === 'true' && isAuthenticated) {
-      // Restore cart
       const savedCart = sessionStorage.getItem('pendingCart');
       if (savedCart) {
         const items = JSON.parse(savedCart) as CartItem[];
         clearCart();
         items.forEach((item) => addToCart(item));
       }
-      // Restore delivery form
       const savedDelivery = sessionStorage.getItem('pendingDeliveryForm');
       if (savedDelivery) {
         setDeliveryForm(JSON.parse(savedDelivery));
       }
-      // Open checkout at step 3 (review & pay)
       setCheckoutStep(3);
       setCheckoutOpen(true);
-      // Clear session storage to prevent loops
       sessionStorage.removeItem('pendingCheckout');
       sessionStorage.removeItem('pendingCart');
       sessionStorage.removeItem('pendingDeliveryForm');
     }
   }, [isAuthenticated]);
+
+  // ── Fetch user orders for tracking ──
+  const fetchUserOrders = useCallback(async () => {
+    if (!isAuthenticated || !user?.id) return;
+    setOrdersLoading(true);
+    try {
+      const res = await fetch('/api/orders');
+      if (res.ok) {
+        const data = await res.json();
+        // The API returns paginated object { orders, total, ... } or array? We'll handle both.
+        let ordersList = Array.isArray(data) ? data : (data.orders || []);
+        // Filter by userId
+        const userOrdersList = ordersList.filter((order: Order) => order.userId === user.id);
+        setUserOrders(userOrdersList);
+      } else {
+        toast.error('Failed to fetch orders');
+      }
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      toast.error('Could not load orders');
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [isAuthenticated, user?.id]);
 
   // ── Filtered products (shuffled) ──
   const filteredProducts = useMemo(() => {
@@ -435,6 +493,8 @@ export default function StoreFront() {
     if (!address || address.length < 3) {
       setUserLocation(null);
       setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+      setDeliveryDistance(null);
+      setIsLocalDelivery(false);
       toast.info('Location cleared');
       return;
     }
@@ -460,6 +520,8 @@ export default function StoreFront() {
         const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
         setUserLocation(address);
         setEffectiveMinOrder(minOrder);
+        setDeliveryDistance(distData.distance);
+        setIsLocalDelivery(distData.isLocal);
         toast.success(
           distData.isLocal
             ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
@@ -497,6 +559,8 @@ export default function StoreFront() {
             const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
             setUserLocation(`📍 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
             setEffectiveMinOrder(minOrder);
+            setDeliveryDistance(distData.distance);
+            setIsLocalDelivery(distData.isLocal);
             toast.success(
               distData.isLocal
                 ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
@@ -523,6 +587,8 @@ export default function StoreFront() {
   const clearLocation = useCallback(() => {
     setUserLocation(null);
     setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+    setDeliveryDistance(null);
+    setIsLocalDelivery(false);
     toast.info('Location removed');
     setLocationDialogOpen(true);
   }, [setUserLocation, setEffectiveMinOrder]);
@@ -568,7 +634,6 @@ export default function StoreFront() {
     }
 
     if (!isAuthenticated) {
-      // Save pending data before redirecting to sign‑in
       sessionStorage.setItem('pendingCheckout', 'true');
       sessionStorage.setItem('pendingCart', JSON.stringify(cart));
       sessionStorage.setItem('pendingDeliveryForm', JSON.stringify(deliveryForm));
@@ -669,7 +734,6 @@ export default function StoreFront() {
             setCheckoutOpen(false);
             setCheckoutStep(1);
             setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
-            // Clear pending session data
             sessionStorage.removeItem('pendingCheckout');
             sessionStorage.removeItem('pendingCart');
             sessionStorage.removeItem('pendingDeliveryForm');
@@ -852,7 +916,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
-              {/* User / Auth */}
+              {/* ===== USER / AUTH (added Track Orders) ===== */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -875,6 +939,10 @@ export default function StoreFront() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => { setTrackOrdersOpen(true); fetchUserOrders(); }} className="cursor-pointer">
+                      <Package className="w-4 h-4 mr-2" />
+                      Track Orders
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600">
                       <LogOut className="w-4 h-4 mr-2" />
                       {t('logout', language)}
@@ -1076,6 +1144,78 @@ export default function StoreFront() {
         </DialogContent>
       </Dialog>
 
+      {/* ============ TRACK ORDERS DIALOG ============ */}
+      <Dialog open={trackOrdersOpen} onOpenChange={setTrackOrdersOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-[#8D6E63]" />
+              Your Orders
+            </DialogTitle>
+            <DialogDescription>
+              Track the status of your orders.
+            </DialogDescription>
+          </DialogHeader>
+          {ordersLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-[#8D6E63]" />
+            </div>
+          ) : userOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+              <p>No orders yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {userOrders.map((order) => (
+                <Card key={order.id} className="border shadow-none">
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                      <Badge className={
+                        order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                        'bg-blue-100 text-blue-800'
+                      }>
+                        {order.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
+                      <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
+                      {order.items && order.items.length > 0 && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          {order.items.map((item, idx) => (
+                            <span key={idx}>
+                              {item.productName} × {item.quantity} {item.unit}
+                              {idx < order.items.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setTrackOrdersOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1 w-full">
         {/* ============ HERO ============ */}
@@ -1132,13 +1272,22 @@ export default function StoreFront() {
                 Fresh Groceries, Delivered
               </h1>
               <p
-                className="text-sm xs:text-base sm:text-lg text-white mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm font-medium"
+                className="text-sm xs:text-base sm:text-lg text-white mb-3 xs:mb-4 sm:mb-5 leading-relaxed max-w-sm font-medium"
                 style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
               >
                 {userLocation
                   ? `Quality products at wholesale prices. Min order ₹${effectiveMinOrder} for your location. Free delivery above ₹${FREE_DELIVERY_THRESHOLD}.`
                   : 'Set your delivery location to see your minimum order. Free delivery above ₹5,000.'}
               </p>
+              {/* ─── DELIVERY ESTIMATE ─── */}
+              {userLocation && deliveryDistance !== null && (
+                <p
+                  className="text-sm xs:text-base sm:text-lg text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm bg-black/30 backdrop-blur-sm rounded-full px-4 py-1.5 inline-block"
+                  style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
+                >
+                  🚀 Delivery: {isLocalDelivery ? '3-4 hours' : '2 days'}
+                </p>
+              )}
               <Button
                 size="lg"
                 className="bg-white text-[#5d4037] hover:bg-gray-100 rounded-full px-6 xs:px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-bold text-sm sm:text-base"
