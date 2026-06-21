@@ -405,9 +405,7 @@ export default function StoreFront() {
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data = await res.json();
-        // The API returns paginated object { orders, total, ... } or array? We'll handle both.
         let ordersList = Array.isArray(data) ? data : (data.orders || []);
-        // Filter by userId
         const userOrdersList = ordersList.filter((order: Order) => order.userId === user.id);
         setUserOrders(userOrdersList);
       } else {
@@ -1269,15 +1267,21 @@ export default function StoreFront() {
                 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-2 xs:mb-3 sm:mb-4 leading-[1.1]"
                 style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.45)' }}
               >
-                Fresh Groceries, Delivered
+                {t('heroTitle', language)}
               </h1>
               <p
                 className="text-sm xs:text-base sm:text-lg text-white mb-3 xs:mb-4 sm:mb-5 leading-relaxed max-w-sm font-medium"
                 style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
               >
                 {userLocation
-                  ? `Quality products at wholesale prices. Min order ₹${effectiveMinOrder} for your location. Free delivery above ₹${FREE_DELIVERY_THRESHOLD}.`
-                  : 'Set your delivery location to see your minimum order. Free delivery above ₹5,000.'}
+                  ? t('heroSubtitleWithLocation', language, {
+                      minOrder: effectiveMinOrder,
+                      freeThreshold: FREE_DELIVERY_THRESHOLD,
+                    })
+                  : t('heroSubtitleNoLocation', language, {
+                      freeThreshold: FREE_DELIVERY_THRESHOLD,
+                    })
+                }
               </p>
               {/* ─── DELIVERY ESTIMATE ─── */}
               {userLocation && deliveryDistance !== null && (
@@ -1285,7 +1289,9 @@ export default function StoreFront() {
                   className="text-sm xs:text-base sm:text-lg text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm bg-black/30 backdrop-blur-sm rounded-full px-4 py-1.5 inline-block"
                   style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
                 >
-                  🚀 Delivery: {isLocalDelivery ? '3-4 hours' : '2 days'}
+                  {isLocalDelivery
+                    ? t('deliveryEstimateLocal', language)
+                    : t('deliveryEstimateStandard', language)}
                 </p>
               )}
               <Button
