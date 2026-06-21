@@ -341,22 +341,18 @@ export default function StoreFront() {
   useEffect(() => {
     const pending = sessionStorage.getItem('pendingCheckout');
     if (pending === 'true' && isAuthenticated) {
-      // Restore cart
       const savedCart = sessionStorage.getItem('pendingCart');
       if (savedCart) {
         const items = JSON.parse(savedCart) as CartItem[];
         clearCart();
         items.forEach((item) => addToCart(item));
       }
-      // Restore delivery form
       const savedDelivery = sessionStorage.getItem('pendingDeliveryForm');
       if (savedDelivery) {
         setDeliveryForm(JSON.parse(savedDelivery));
       }
-      // Open checkout at step 3 (review & pay)
       setCheckoutStep(3);
       setCheckoutOpen(true);
-      // Clear session storage to prevent loops
       sessionStorage.removeItem('pendingCheckout');
       sessionStorage.removeItem('pendingCart');
       sessionStorage.removeItem('pendingDeliveryForm');
@@ -559,7 +555,7 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order ──
+  // ── Place order (minimum order removed for testing) ──
   const handlePlaceOrder = async () => {
     if (!userLocation) {
       toast.error('Please set your delivery location first.');
@@ -568,7 +564,6 @@ export default function StoreFront() {
     }
 
     if (!isAuthenticated) {
-      // Save pending data before redirecting to sign‑in
       sessionStorage.setItem('pendingCheckout', 'true');
       sessionStorage.setItem('pendingCart', JSON.stringify(cart));
       sessionStorage.setItem('pendingDeliveryForm', JSON.stringify(deliveryForm));
@@ -581,10 +576,11 @@ export default function StoreFront() {
       return;
     }
 
-    if (cartTotal < effectiveMinOrder) {
-      toast.error(`Minimum order is ₹${effectiveMinOrder} for your location`);
-      return;
-    }
+    // ─── MIN ORDER CHECK REMOVED FOR TESTING ───
+    // if (cartTotal < effectiveMinOrder) {
+    //   toast.error(`Minimum order is ₹${effectiveMinOrder} for your location`);
+    //   return;
+    // }
 
     const orderData = {
       userId: user?.id || 'guest',
@@ -669,7 +665,6 @@ export default function StoreFront() {
             setCheckoutOpen(false);
             setCheckoutStep(1);
             setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
-            // Clear pending session data
             sessionStorage.removeItem('pendingCheckout');
             sessionStorage.removeItem('pendingCart');
             sessionStorage.removeItem('pendingDeliveryForm');
@@ -1549,7 +1544,7 @@ export default function StoreFront() {
                 <Button
                   className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                   size="lg"
-                  disabled={cartTotal < effectiveMinOrder || !userLocation}
+                  disabled={!userLocation} // min order removed
                   onClick={() => {
                     if (!userLocation) {
                       toast.error('Please set your delivery location first.');
@@ -1568,13 +1563,11 @@ export default function StoreFront() {
                 >
                   {!userLocation
                     ? 'Set Location to Checkout'
-                    : cartTotal < effectiveMinOrder
-                      ? `${t('checkout', language)} (₹${effectiveMinOrder})`
-                      : !isAuthenticated
-                        ? 'Sign in to Checkout'
-                        : t('checkout', language)}
+                    : !isAuthenticated
+                      ? 'Sign in to Checkout'
+                      : t('checkout', language)}
                 </Button>
-                {!isAuthenticated && cartTotal >= effectiveMinOrder && userLocation && (
+                {!isAuthenticated && userLocation && (
                   <p className="text-xs text-gray-500 text-center">
                     You need to sign in before placing an order.
                   </p>
@@ -1774,7 +1767,7 @@ export default function StoreFront() {
               <Button
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={handlePlaceOrder}
-                disabled={razorpayLoading || cartTotal < effectiveMinOrder || !userLocation}
+                disabled={razorpayLoading || !userLocation}
               >
                 {razorpayLoading ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing</>
