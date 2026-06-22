@@ -260,7 +260,7 @@ export default function StoreFront() {
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
-  // ── Local state ──────────────────────────────────────────
+  // ── Local state (declared before use) ──────────────────
   const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
   const [isLocalDelivery, setIsLocalDelivery] = useState(false);
 
@@ -271,6 +271,8 @@ export default function StoreFront() {
     const storedMinOrder = localStorage.getItem('effectiveMinOrder');
     const storedDistance = localStorage.getItem('deliveryDistance');
     const storedIsLocal = localStorage.getItem('isLocalDelivery');
+
+    console.log('🔍 Loading from localStorage:', { storedLocation, storedMinOrder, storedDistance, storedIsLocal });
 
     if (storedLocation) {
       setUserLocation(storedLocation);
@@ -300,6 +302,8 @@ export default function StoreFront() {
       localStorage.removeItem('deliveryDistance');
     }
     localStorage.setItem('isLocalDelivery', String(isLocalDelivery));
+
+    console.log('💾 Saved to localStorage:', { userLocation, effectiveMinOrder, deliveryDistance, isLocalDelivery });
   }, [userLocation, effectiveMinOrder, deliveryDistance, isLocalDelivery]);
 
   // ── Sync session ──
@@ -402,7 +406,7 @@ export default function StoreFront() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Location pop‑up after 7 seconds (only if no location and not prompted) ──
+  // ── Location pop‑up after 7 seconds ──
   useEffect(() => {
     if (!loading && !userLocation && !locationPrompted) {
       const timer = setTimeout(() => {
@@ -525,10 +529,9 @@ export default function StoreFront() {
   const deliveryCharge = cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
   const grandTotal = cartTotal + deliveryCharge;
 
-  // ── Location functions (FIXED: compute isLocal from distance) ──
+  // ── Location functions ──
   const updateLocationAndMinOrder = useCallback(async (address: string) => {
     if (!address || address.length < 3) {
-      // Clear location
       setUserLocation(null);
       setEffectiveMinOrder(DEFAULT_MIN_ORDER);
       setDeliveryDistance(null);
@@ -673,10 +676,33 @@ export default function StoreFront() {
 
   // ── Place order (handles both Razorpay and COD) ──
   const handlePlaceOrder = async () => {
+    // 🔍 Debug: log current state
+    console.log('📦 Placing order with:', {
+      userLocation,
+      effectiveMinOrder,
+      cartTotal,
+      selectedPaymentMethod,
+    });
+
+    // If location is missing, prompt
     if (!userLocation) {
       toast.error('Please set your delivery location first.');
       setLocationDialogOpen(true);
       return;
+    }
+
+    // Fallback: if effectiveMinOrder is still default but location is set, reload from localStorage
+    if (effectiveMinOrder === DEFAULT_MIN_ORDER && userLocation) {
+      const storedMinOrder = localStorage.getItem('effectiveMinOrder');
+      if (storedMinOrder) {
+        const parsed = Number(storedMinOrder);
+        if (parsed !== DEFAULT_MIN_ORDER) {
+          setEffectiveMinOrder(parsed);
+          toast.info('Reloaded minimum order from saved location.');
+          // re-check after state update
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
     }
 
     if (!isAuthenticated) {
@@ -692,6 +718,7 @@ export default function StoreFront() {
       return;
     }
 
+    // Now check min order with the (possibly updated) effectiveMinOrder
     if (cartTotal < effectiveMinOrder) {
       toast.error(`Minimum order is ₹${effectiveMinOrder} for your location`);
       return;
@@ -808,7 +835,7 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order with COD (FIXED: safe order ID extraction) ──
+  // ── Place order with COD ──
   const placeOrderCOD = async () => {
     setPlacingOrder(true);
     try {
@@ -1025,7 +1052,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
-              {/* ===== USER / AUTH (updated with Profile) ===== */}
+              {/* ===== USER / AUTH ===== */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
