@@ -260,6 +260,48 @@ export default function StoreFront() {
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
+  // ── Local state ──────────────────────────────────────────
+  const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
+  const [isLocalDelivery, setIsLocalDelivery] = useState(false);
+
+  // ── Persist location in localStorage ──
+  useEffect(() => {
+    // Load from localStorage on mount
+    const storedLocation = localStorage.getItem('userLocation');
+    const storedMinOrder = localStorage.getItem('effectiveMinOrder');
+    const storedDistance = localStorage.getItem('deliveryDistance');
+    const storedIsLocal = localStorage.getItem('isLocalDelivery');
+
+    if (storedLocation) {
+      setUserLocation(storedLocation);
+    }
+    if (storedMinOrder) {
+      setEffectiveMinOrder(Number(storedMinOrder));
+    }
+    if (storedDistance) {
+      setDeliveryDistance(Number(storedDistance));
+    }
+    if (storedIsLocal) {
+      setIsLocalDelivery(storedIsLocal === 'true');
+    }
+  }, []);
+
+  // Save to localStorage whenever these values change
+  useEffect(() => {
+    if (userLocation) {
+      localStorage.setItem('userLocation', userLocation);
+    } else {
+      localStorage.removeItem('userLocation');
+    }
+    localStorage.setItem('effectiveMinOrder', String(effectiveMinOrder));
+    if (deliveryDistance !== null) {
+      localStorage.setItem('deliveryDistance', String(deliveryDistance));
+    } else {
+      localStorage.removeItem('deliveryDistance');
+    }
+    localStorage.setItem('isLocalDelivery', String(isLocalDelivery));
+  }, [userLocation, effectiveMinOrder, deliveryDistance, isLocalDelivery]);
+
   // ── Sync session ──
   useEffect(() => {
     if (session?.user) {
@@ -323,10 +365,6 @@ export default function StoreFront() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationPrompted, setLocationPrompted] = useState(false);
 
-  // ── Delivery estimate ──
-  const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
-  const [isLocalDelivery, setIsLocalDelivery] = useState(false);
-
   // ── Profile dialog ──
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
@@ -364,7 +402,7 @@ export default function StoreFront() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Location pop‑up after 7 seconds ──
+  // ── Location pop‑up after 7 seconds (only if no location and not prompted) ──
   useEffect(() => {
     if (!loading && !userLocation && !locationPrompted) {
       const timer = setTimeout(() => {
@@ -490,6 +528,7 @@ export default function StoreFront() {
   // ── Location functions (FIXED: compute isLocal from distance) ──
   const updateLocationAndMinOrder = useCallback(async (address: string) => {
     if (!address || address.length < 3) {
+      // Clear location
       setUserLocation(null);
       setEffectiveMinOrder(DEFAULT_MIN_ORDER);
       setDeliveryDistance(null);
@@ -592,6 +631,10 @@ export default function StoreFront() {
     setEffectiveMinOrder(DEFAULT_MIN_ORDER);
     setDeliveryDistance(null);
     setIsLocalDelivery(false);
+    localStorage.removeItem('userLocation');
+    localStorage.removeItem('deliveryDistance');
+    localStorage.setItem('effectiveMinOrder', String(DEFAULT_MIN_ORDER));
+    localStorage.setItem('isLocalDelivery', 'false');
     toast.info('Location removed');
     setLocationDialogOpen(true);
   }, [setUserLocation, setEffectiveMinOrder]);
