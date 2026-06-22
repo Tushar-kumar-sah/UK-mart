@@ -19,8 +19,13 @@ export const translations: Record<Language, Record<string, string>> = {
     personalCare: 'Personal Care',
     household: 'Household',
     // Hero
-    heroTitle: 'Fresh Groceries Delivered',
-    heroSubtitle: 'Quality products at wholesale prices. Minimum order ₹2,500. Free delivery on orders above ₹5,000.',
+    heroTitle: 'Fresh Groceries, Delivered',
+    heroSubtitleWithLocation:
+      'Quality products at wholesale prices. Min order ₹{{minOrder}} for your location. Free delivery above ₹{{freeThreshold}}.',
+    heroSubtitleNoLocation:
+      'Set your delivery location to see your minimum order. Free delivery above ₹{{freeThreshold}}.',
+    deliveryEstimateLocal: '🚀 Delivery: 3‑4 hours',
+    deliveryEstimateStandard: '🚀 Delivery: 2 days',
     shopNow: 'Shop Now',
     // Products
     products: 'Products',
@@ -41,8 +46,8 @@ export const translations: Record<Language, Record<string, string>> = {
     free: 'FREE',
     checkout: 'Proceed to Checkout',
     clearCart: 'Clear Cart',
-    // Checkout
-    checkout: 'Checkout',
+    // Checkout (only one "checkout" key, we reuse it above)
+    // deliveryDetails, fullName, etc.
     deliveryDetails: 'Delivery Details',
     fullName: 'Full Name',
     phone: 'Phone Number',
@@ -92,7 +97,6 @@ export const translations: Record<Language, Record<string, string>> = {
     customQty: 'Enter quantity (g)',
     // Admin
     dashboard: 'Dashboard',
-    products: 'Products',
     categories: 'Categories',
     stock: 'Stock',
     offer: 'Offers',
@@ -106,7 +110,7 @@ export const translations: Record<Language, Record<string, string>> = {
     activeOffers: 'Active Offers',
     lowStock: 'Low Stock Items',
     pendingOrders: 'Pending Orders',
-    todayRevenue: 'Today\'s Revenue',
+    todayRevenue: "Today's Revenue",
     addProduct: 'Add Product',
     editProduct: 'Edit Product',
     saveProduct: 'Save Product',
@@ -132,7 +136,6 @@ export const translations: Record<Language, Record<string, string>> = {
     subcategory: 'Subcategory',
     description: 'Description',
     image: 'Image',
-    stock: 'Stock',
     discount: 'Discount',
     orderDate: 'Order Date',
     customer: 'Customer',
@@ -159,7 +162,6 @@ export const translations: Record<Language, Record<string, string>> = {
     percentage: 'Percentage',
     flat: 'Flat Amount',
     discountValue: 'Discount Value',
-    minOrder: 'Min Order Amount (₹)',
     maxDiscount: 'Max Discount (₹)',
     startDate: 'Start Date',
     endDate: 'End Date',
@@ -169,6 +171,7 @@ export const translations: Record<Language, Record<string, string>> = {
     confirmDelete: 'Are you sure you want to delete?',
     backToStore: 'Back to Store',
   },
+
   hi: {
     storeName: 'UK मार्ट',
     searchPlaceholder: 'उत्पाद खोजें...',
@@ -185,7 +188,12 @@ export const translations: Record<Language, Record<string, string>> = {
     personalCare: 'व्यक्तिगत देखभाल',
     household: 'घरेलू सामग्री',
     heroTitle: 'ताज़ी ग्रोसरी डिलीवरी',
-    heroSubtitle: 'थोक दरों पर गुणवत्तापूर्ण उत्पाद। न्यूनतम ऑर्डर ₹2,500। ₹5,000 से अधिक ऑर्डर पर मुफ्त डिलीवरी।',
+    heroSubtitleWithLocation:
+      'थोक दरों पर गुणवत्तापूर्ण उत्पाद। आपके स्थान के लिए न्यूनतम ऑर्डर ₹{{minOrder}}। ₹{{freeThreshold}} से अधिक पर मुफ्त डिलीवरी।',
+    heroSubtitleNoLocation:
+      'अपना डिलीवरी स्थान सेट करें ताकि न्यूनतम ऑर्डर देख सकें। ₹{{freeThreshold}} से अधिक पर मुफ्त डिलीवरी।',
+    deliveryEstimateLocal: '🚀 डिलीवरी: 3‑4 घंटे',
+    deliveryEstimateStandard: '🚀 डिलीवरी: 2 दिन',
     shopNow: 'अभी खरीदें',
     products: 'उत्पाद',
     addToCart: 'कार्ट में डालें',
@@ -204,7 +212,7 @@ export const translations: Record<Language, Record<string, string>> = {
     free: 'मुफ्त',
     checkout: 'चेकआउट करें',
     clearCart: 'कार्ट साफ करें',
-    checkout: 'चेकआउट',
+    // duplicate checkout removed; we reuse the key above
     deliveryDetails: 'डिलीवरी विवरण',
     fullName: 'पूरा नाम',
     phone: 'फ़ोन नंबर',
@@ -249,7 +257,6 @@ export const translations: Record<Language, Record<string, string>> = {
     quantity: 'मात्रा',
     customQty: 'मात्रा दर्ज करें (ग्रा)',
     dashboard: 'डैशबोर्ड',
-    products: 'उत्पाद',
     categories: 'श्रेणियाँ',
     stock: 'स्टॉक',
     offer: 'ऑफर',
@@ -289,7 +296,6 @@ export const translations: Record<Language, Record<string, string>> = {
     subcategory: 'उपश्रेणी',
     description: 'विवरण',
     image: 'चित्र',
-    stock: 'स्टॉक',
     discount: 'छूट',
     orderDate: 'ऑर्डर तिथि',
     customer: 'ग्राहक',
@@ -316,7 +322,6 @@ export const translations: Record<Language, Record<string, string>> = {
     percentage: 'प्रतिशत',
     flat: 'सपाट राशि',
     discountValue: 'छूट मूल्य',
-    minOrder: 'न्यूनतम ऑर्डर (₹)',
     maxDiscount: 'अधिकतम छूट (₹)',
     startDate: 'प्रारंभ तिथि',
     endDate: 'समाप्ति तिथि',
@@ -326,6 +331,7 @@ export const translations: Record<Language, Record<string, string>> = {
     confirmDelete: 'क्या आप हटाना चाहते हैं?',
     backToStore: 'स्टोर पर वापस',
   },
+
   bn: {
     storeName: 'UK মার্ট',
     searchPlaceholder: 'পণ্য খুঁজুন...',
@@ -342,7 +348,12 @@ export const translations: Record<Language, Record<string, string>> = {
     personalCare: 'ব্যক্তিগত যত্ন',
     household: 'গৃহস্থালি',
     heroTitle: 'তাজা মুদি ডেলিভারি',
-    heroSubtitle: 'পাইকারি দামে মানসম্পন্ন পণ্য। সর্বনিম্ন অর্ডার ₹2,500। ₹5,000 এর উপরে বিনামূল্যে ডেলিভারি।',
+    heroSubtitleWithLocation:
+      'পাইকারি দামে মানসম্পন্ন পণ্য। আপনার অবস্থানের জন্য ন্যূনতম অর্ডার ₹{{minOrder}}। ₹{{freeThreshold}} এর উপরে বিনামূল্যে ডেলিভারি।',
+    heroSubtitleNoLocation:
+      'আপনার ডেলিভারি অবস্থান সেট করুন যাতে ন্যূনতম অর্ডার দেখতে পারেন। ₹{{freeThreshold}} এর উপরে বিনামূল্যে ডেলিভারি।',
+    deliveryEstimateLocal: '🚀 ডেলিভারি: ৩‑৪ ঘন্টা',
+    deliveryEstimateStandard: '🚀 ডেলিভারি: ২ দিন',
     shopNow: 'এখনই কিনুন',
     products: 'পণ্য',
     addToCart: 'কার্টে যোগ করুন',
@@ -361,7 +372,6 @@ export const translations: Record<Language, Record<string, string>> = {
     free: 'বিনামূল্যে',
     checkout: 'চেকআউট করুন',
     clearCart: 'কার্ট মুছুন',
-    checkout: 'চেকআউট',
     deliveryDetails: 'ডেলিভারি বিবরণ',
     fullName: 'পুরো নাম',
     phone: 'ফোন নম্বর',
@@ -406,7 +416,6 @@ export const translations: Record<Language, Record<string, string>> = {
     quantity: 'পরিমাণ',
     customQty: 'পরিমাণ লিখুন (গ্রাম)',
     dashboard: 'ড্যাশবোর্ড',
-    products: 'পণ্য',
     categories: 'বিভাগ',
     stock: 'স্টক',
     offer: 'অফার',
@@ -446,7 +455,6 @@ export const translations: Record<Language, Record<string, string>> = {
     subcategory: 'উপবিভাগ',
     description: 'বিবরণ',
     image: 'ছবি',
-    stock: 'স্টক',
     discount: 'ছাড়',
     orderDate: 'অর্ডারের তারিখ',
     customer: 'গ্রাহক',
@@ -473,7 +481,6 @@ export const translations: Record<Language, Record<string, string>> = {
     percentage: 'শতাংশ',
     flat: 'সমতল পরিমাণ',
     discountValue: 'ছাড়ের মান',
-    minOrder: 'সর্বনিম্ন অর্ডার (₹)',
     maxDiscount: 'সর্বোচ্চ ছাড় (₹)',
     startDate: 'শুরুর তারিখ',
     endDate: 'শেষের তারিখ',
@@ -489,7 +496,9 @@ export function t(key: string, lang: Language, params?: Record<string, string | 
   let text = translations[lang]?.[key] || translations.en[key] || key;
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
-      text = text.replace(`{${k}}`, String(v));
+      // Replace both {{key}} and {key} to be safe
+      text = text.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'g'), String(v));
+      text = text.replace(new RegExp(`\\{\\s*${k}\\s*\\}`, 'g'), String(v));
     });
   }
   return text;
