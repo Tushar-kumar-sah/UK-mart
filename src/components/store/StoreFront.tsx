@@ -315,7 +315,6 @@ export default function StoreFront() {
   });
   const [placingOrder, setPlacingOrder] = useState(false);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
-  // New state for payment method selection
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'RAZORPAY' | 'COD'>('RAZORPAY');
 
   // ── Location dialog ──
@@ -328,7 +327,7 @@ export default function StoreFront() {
   const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
   const [isLocalDelivery, setIsLocalDelivery] = useState(false);
 
-  // ── Profile dialog (replaces trackOrdersOpen) ──
+  // ── Profile dialog ──
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -651,19 +650,17 @@ export default function StoreFront() {
       return;
     }
 
-    // If COD is selected, we bypass Razorpay
     if (selectedPaymentMethod === 'COD') {
       await placeOrderCOD();
       return;
     }
 
-    // Otherwise, proceed with Razorpay
+    // Razorpay flow
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
     }
 
-    // Razorpay flow...
     setRazorpayLoading(true);
     try {
       const orderData = {
@@ -764,7 +761,7 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order with COD ──
+  // ── Place order with COD (FIXED) ──
   const placeOrderCOD = async () => {
     setPlacingOrder(true);
     try {
@@ -798,7 +795,14 @@ export default function StoreFront() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to place order');
 
-      setOrderSuccessData({ orderId: data.order.id });
+      // ✅ Safely extract order ID
+      const orderId = data?.order?.id || data?.id;
+      if (!orderId) {
+        console.error('Unexpected order response:', data);
+        throw new Error('Invalid order response');
+      }
+
+      setOrderSuccessData({ orderId });
       clearCart();
       setCheckoutOpen(false);
       setCheckoutStep(1);
