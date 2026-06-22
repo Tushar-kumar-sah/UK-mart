@@ -487,7 +487,7 @@ export default function StoreFront() {
   const deliveryCharge = cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
   const grandTotal = cartTotal + deliveryCharge;
 
-  // ── Location functions ──
+  // ── Location functions (FIXED: compute isLocal from distance) ──
   const updateLocationAndMinOrder = useCallback(async (address: string) => {
     if (!address || address.length < 3) {
       setUserLocation(null);
@@ -516,15 +516,17 @@ export default function StoreFront() {
       });
       const distData = await distRes.json();
       if (distRes.ok) {
-        const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
+        const distance = distData.distance; // in km
+        const isLocal = distance <= LOCAL_RADIUS_KM;
+        const minOrder = isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
         setUserLocation(address);
         setEffectiveMinOrder(minOrder);
-        setDeliveryDistance(distData.distance);
-        setIsLocalDelivery(distData.isLocal);
+        setDeliveryDistance(distance);
+        setIsLocalDelivery(isLocal);
         toast.success(
-          distData.isLocal
-            ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
-            : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+          isLocal
+            ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distance.toFixed(1)} km)`
+            : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distance.toFixed(1)} km)`
         );
         setLocationDialogOpen(false);
       } else {
@@ -555,15 +557,17 @@ export default function StoreFront() {
           });
           const distData = await distRes.json();
           if (distRes.ok) {
-            const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
+            const distance = distData.distance;
+            const isLocal = distance <= LOCAL_RADIUS_KM;
+            const minOrder = isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
             setUserLocation(`📍 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
             setEffectiveMinOrder(minOrder);
-            setDeliveryDistance(distData.distance);
-            setIsLocalDelivery(distData.isLocal);
+            setDeliveryDistance(distance);
+            setIsLocalDelivery(isLocal);
             toast.success(
-              distData.isLocal
-                ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
-                : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+              isLocal
+                ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distance.toFixed(1)} km)`
+                : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distance.toFixed(1)} km)`
             );
             setLocationDialogOpen(false);
           } else {
@@ -761,7 +765,7 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order with COD (FIXED) ──
+  // ── Place order with COD (FIXED: safe order ID extraction) ──
   const placeOrderCOD = async () => {
     setPlacingOrder(true);
     try {
@@ -795,7 +799,6 @@ export default function StoreFront() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to place order');
 
-      // ✅ Safely extract order ID
       const orderId = data?.order?.id || data?.id;
       if (!orderId) {
         console.error('Unexpected order response:', data);
