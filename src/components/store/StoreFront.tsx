@@ -119,7 +119,6 @@ const LOCAL_MIN_ORDER = 1000;
 const LOCAL_RADIUS_KM = 13;
 const FREE_DELIVERY_THRESHOLD = 5000;
 const DELIVERY_CHARGE = 50;
-const BACKEND_MIN_ORDER_FOR_COD = 2500; // temporary workaround until backend is fixed
 
 const CATEGORY_EMOJI: Record<string, string> = {
   'Fruits & Vegetables': '🍎',
@@ -261,32 +260,6 @@ export default function StoreFront() {
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
-  // ── Local state ──
-  const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
-  const [isLocalDelivery, setIsLocalDelivery] = useState(false);
-
-  // ── Persist location in localStorage ──
-  useEffect(() => {
-    const storedLocation = localStorage.getItem('userLocation');
-    const storedMinOrder = localStorage.getItem('effectiveMinOrder');
-    const storedDistance = localStorage.getItem('deliveryDistance');
-    const storedIsLocal = localStorage.getItem('isLocalDelivery');
-
-    if (storedLocation) setUserLocation(storedLocation);
-    if (storedMinOrder) setEffectiveMinOrder(Number(storedMinOrder));
-    if (storedDistance) setDeliveryDistance(Number(storedDistance));
-    if (storedIsLocal) setIsLocalDelivery(storedIsLocal === 'true');
-  }, []);
-
-  useEffect(() => {
-    if (userLocation) localStorage.setItem('userLocation', userLocation);
-    else localStorage.removeItem('userLocation');
-    localStorage.setItem('effectiveMinOrder', String(effectiveMinOrder));
-    if (deliveryDistance !== null) localStorage.setItem('deliveryDistance', String(deliveryDistance));
-    else localStorage.removeItem('deliveryDistance');
-    localStorage.setItem('isLocalDelivery', String(isLocalDelivery));
-  }, [userLocation, effectiveMinOrder, deliveryDistance, isLocalDelivery]);
-
   // ── Sync session ──
   useEffect(() => {
     if (session?.user) {
@@ -302,7 +275,7 @@ export default function StoreFront() {
     }
   }, [session, setUser]);
 
-  // ── Razorpay script loader (FIXED) ──
+  // ── Razorpay script loader ──
   const [razorpayScriptLoaded, setRazorpayScriptLoaded] = useState(false);
   useEffect(() => {
     const script = document.createElement('script');
@@ -342,7 +315,6 @@ export default function StoreFront() {
   });
   const [placingOrder, setPlacingOrder] = useState(false);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'RAZORPAY' | 'COD'>('RAZORPAY');
 
   // ── Location dialog ──
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
@@ -350,8 +322,12 @@ export default function StoreFront() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationPrompted, setLocationPrompted] = useState(false);
 
-  // ── Profile dialog ──
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  // ── Delivery estimate ──
+  const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
+  const [isLocalDelivery, setIsLocalDelivery] = useState(false);
+
+  // ── Track orders dialog ──
+  const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -410,7 +386,9 @@ export default function StoreFront() {
         items.forEach((item) => addToCart(item));
       }
       const savedDelivery = sessionStorage.getItem('pendingDeliveryForm');
-      if (savedDelivery) setDeliveryForm(JSON.parse(savedDelivery));
+      if (savedDelivery) {
+        setDeliveryForm(JSON.parse(savedDelivery));
+      }
       setCheckoutStep(3);
       setCheckoutOpen(true);
       sessionStorage.removeItem('pendingCheckout');
@@ -419,7 +397,7 @@ export default function StoreFront() {
     }
   }, [isAuthenticated]);
 
-  // ── Fetch user orders ──
+  // ── Fetch user orders for tracking ──
   const fetchUserOrders = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
     setOrdersLoading(true);
@@ -441,11 +419,15 @@ export default function StoreFront() {
     }
   }, [isAuthenticated, user?.id]);
 
-  // ── Filtered products ──
+  // ── Filtered products (shuffled) ──
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
-    if (selectedCategory) result = result.filter((p) => p.categoryId === selectedCategory);
-    if (selectedSubcategory) result = result.filter((p) => p.subcategoryId === selectedSubcategory);
+    if (selectedCategory) {
+      result = result.filter((p) => p.categoryId === selectedCategory);
+    }
+    if (selectedSubcategory) {
+      result = result.filter((p) => p.subcategoryId === selectedSubcategory);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -472,6 +454,7 @@ export default function StoreFront() {
     return (cat?.children || []).filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   }, [categories, selectedCategory]);
 
+  // ── Products grouped by category (shuffled per category) ──
   const productsByCategory = useMemo(() => {
     const activeProducts = products.filter((p) => p.isActive);
     const groups: { category: Category; items: Product[] }[] = [];
@@ -487,7 +470,9 @@ export default function StoreFront() {
             p.description.toLowerCase().includes(q)
         );
       }
-      if (items.length > 0) groups.push({ category: cat, items: shuffleArray(items) });
+      if (items.length > 0) {
+        groups.push({ category: cat, items: shuffleArray(items) });
+      }
     }
     return groups;
   }, [products, parentCategories, searchQuery]);
@@ -530,17 +515,15 @@ export default function StoreFront() {
       });
       const distData = await distRes.json();
       if (distRes.ok) {
-        const distance = distData.distance;
-        const isLocal = distance <= LOCAL_RADIUS_KM;
-        const minOrder = isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
+        const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
         setUserLocation(address);
         setEffectiveMinOrder(minOrder);
-        setDeliveryDistance(distance);
-        setIsLocalDelivery(isLocal);
+        setDeliveryDistance(distData.distance);
+        setIsLocalDelivery(distData.isLocal);
         toast.success(
-          isLocal
-            ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distance.toFixed(1)} km)`
-            : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distance.toFixed(1)} km)`
+          distData.isLocal
+            ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+            : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
         );
         setLocationDialogOpen(false);
       } else {
@@ -571,17 +554,15 @@ export default function StoreFront() {
           });
           const distData = await distRes.json();
           if (distRes.ok) {
-            const distance = distData.distance;
-            const isLocal = distance <= LOCAL_RADIUS_KM;
-            const minOrder = isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
+            const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
             setUserLocation(`📍 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
             setEffectiveMinOrder(minOrder);
-            setDeliveryDistance(distance);
-            setIsLocalDelivery(isLocal);
+            setDeliveryDistance(distData.distance);
+            setIsLocalDelivery(distData.isLocal);
             toast.success(
-              isLocal
-                ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distance.toFixed(1)} km)`
-                : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distance.toFixed(1)} km)`
+              distData.isLocal
+                ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
+                : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
             );
             setLocationDialogOpen(false);
           } else {
@@ -606,10 +587,6 @@ export default function StoreFront() {
     setEffectiveMinOrder(DEFAULT_MIN_ORDER);
     setDeliveryDistance(null);
     setIsLocalDelivery(false);
-    localStorage.removeItem('userLocation');
-    localStorage.removeItem('deliveryDistance');
-    localStorage.setItem('effectiveMinOrder', String(DEFAULT_MIN_ORDER));
-    localStorage.setItem('isLocalDelivery', 'false');
     toast.info('Location removed');
     setLocationDialogOpen(true);
   }, [setUserLocation, setEffectiveMinOrder]);
@@ -637,9 +614,13 @@ export default function StoreFront() {
     setTimeout(() => setAddedProducts((prev) => ({ ...prev, [product.id]: false })), 1200);
   };
 
+  // ── Update cart quantity ──
   const handleUpdateCartQty = (item: CartItem, newQty: number) => {
-    if (newQty <= 0) removeFromCart(item.productId);
-    else updateCartItem(item.productId, { quantity: newQty, totalPrice: newQty * item.pricePerUnit });
+    if (newQty <= 0) {
+      removeFromCart(item.productId);
+    } else {
+      updateCartItem(item.productId, { quantity: newQty, totalPrice: newQty * item.pricePerUnit });
+    }
   };
 
   // ── Place order ──
@@ -663,36 +644,32 @@ export default function StoreFront() {
       return;
     }
 
-    // Reload effectiveMinOrder from localStorage if it's still default
-    if (effectiveMinOrder === DEFAULT_MIN_ORDER && userLocation) {
-      const storedMinOrder = localStorage.getItem('effectiveMinOrder');
-      if (storedMinOrder) {
-        const parsed = Number(storedMinOrder);
-        if (parsed !== DEFAULT_MIN_ORDER) {
-          setEffectiveMinOrder(parsed);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-    }
-
-    // Frontend min order check (for any payment method)
     if (cartTotal < effectiveMinOrder) {
       toast.error(`Minimum order is ₹${effectiveMinOrder} for your location`);
       return;
     }
 
-    // 🔥 Workaround: backend rejects COD below ₹2500
-    if (selectedPaymentMethod === 'COD' && cartTotal < BACKEND_MIN_ORDER_FOR_COD) {
-      toast.error(`Cash on Delivery is only available for orders above ₹${BACKEND_MIN_ORDER_FOR_COD}. Please use online payment.`);
-      return;
-    }
+    const orderData = {
+      userId: user?.id || 'guest',
+      items: cart.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unit: item.unit,
+        pricePerUnit: item.pricePerUnit,
+        totalPrice: item.totalPrice,
+      })),
+      totalAmount: cartTotal,
+      discountAmount: 0,
+      finalAmount: grandTotal,
+      customerName: deliveryForm.name,
+      customerPhone: deliveryForm.phone,
+      deliveryAddress: deliveryForm.address,
+      pincode: deliveryForm.pincode,
+      notes: deliveryForm.notes,
+      paymentMethod: 'RAZORPAY',
+    };
 
-    if (selectedPaymentMethod === 'COD') {
-      await placeOrderCOD();
-      return;
-    }
-
-    // Razorpay flow
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
@@ -700,27 +677,6 @@ export default function StoreFront() {
 
     setRazorpayLoading(true);
     try {
-      const orderData = {
-        userId: user?.id || 'guest',
-        items: cart.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          unit: item.unit,
-          pricePerUnit: item.pricePerUnit,
-          totalPrice: item.totalPrice,
-        })),
-        totalAmount: cartTotal,
-        discountAmount: 0,
-        finalAmount: grandTotal,
-        customerName: deliveryForm.name,
-        customerPhone: deliveryForm.phone,
-        deliveryAddress: deliveryForm.address,
-        pincode: deliveryForm.pincode,
-        notes: deliveryForm.notes,
-        paymentMethod: 'RAZORPAY',
-      };
-
       const razorpayRes = await fetch('/api/create-razorpay-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -745,7 +701,9 @@ export default function StoreFront() {
           contact: deliveryForm.phone,
           email: user?.email || '',
         },
-        theme: { color: '#8D6E63' },
+        theme: {
+          color: '#8D6E63',
+        },
         modal: {
           ondismiss: () => {
             setRazorpayLoading(false);
@@ -796,63 +754,6 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order with COD ──
-  const placeOrderCOD = async () => {
-    setPlacingOrder(true);
-    try {
-      const orderData = {
-        userId: user?.id || 'guest',
-        items: cart.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          unit: item.unit,
-          pricePerUnit: item.pricePerUnit,
-          totalPrice: item.totalPrice,
-        })),
-        totalAmount: cartTotal,
-        discountAmount: 0,
-        finalAmount: grandTotal,
-        customerName: deliveryForm.name,
-        customerPhone: deliveryForm.phone,
-        deliveryAddress: deliveryForm.address,
-        pincode: deliveryForm.pincode,
-        notes: deliveryForm.notes,
-        paymentMethod: 'COD',
-        paymentStatus: 'PENDING',
-      };
-
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to place order');
-
-      const orderId = data?.order?.id || data?.id;
-      if (!orderId) {
-        console.error('Unexpected order response:', data);
-        throw new Error('Invalid order response');
-      }
-
-      setOrderSuccessData({ orderId });
-      clearCart();
-      setCheckoutOpen(false);
-      setCheckoutStep(1);
-      setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
-      sessionStorage.removeItem('pendingCheckout');
-      sessionStorage.removeItem('pendingCart');
-      sessionStorage.removeItem('pendingDeliveryForm');
-      toast.success('Order placed successfully! Pay on delivery.');
-    } catch (error) {
-      console.error('COD order error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to place order');
-    } finally {
-      setPlacingOrder(false);
-    }
-  };
-
   // ── Scroll to products on category select ──
   useEffect(() => {
     if (selectedCategory) {
@@ -861,8 +762,9 @@ export default function StoreFront() {
   }, [selectedCategory, selectedSubcategory]);
 
   const toggleCategory = (catId: string) => {
-    if (selectedCategory === catId) setSelectedCategory(null);
-    else {
+    if (selectedCategory === catId) {
+      setSelectedCategory(null);
+    } else {
       setSelectedCategory(catId);
       setSelectedSubcategory(null);
     }
@@ -882,7 +784,10 @@ export default function StoreFront() {
       className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4"
       initial="hidden"
       animate="visible"
-      variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.02 } } }}
+      variants={{
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.02 } },
+      }}
     >
       {items.map((product) => (
         <ProductCard
@@ -911,6 +816,7 @@ export default function StoreFront() {
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
+            {/* Logo */}
             <div
               className="flex items-center gap-2 shrink-0 cursor-pointer"
               onClick={() => {
@@ -921,13 +827,20 @@ export default function StoreFront() {
               }}
             >
               <div className="relative h-9 w-9 sm:h-12 sm:w-12 shrink-0">
-                <Image src="/logo.png" alt="UK MART" fill className="object-contain" priority />
+                <Image
+                  src="/logo.png"
+                  alt="UK MART"
+                  fill
+                  className="object-contain"
+                  priority
+                />
               </div>
               <span className="text-base sm:text-xl font-bold text-[#8D6E63] hidden sm:block">
                 {t('storeName', language)}
               </span>
             </div>
 
+            {/* Desktop Search */}
             <div className="hidden md:flex flex-1 max-w-lg mx-4">
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -945,7 +858,9 @@ export default function StoreFront() {
               </div>
             </div>
 
+            {/* Right Actions */}
             <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+              {/* Language Switcher */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="hidden sm:flex gap-1 text-gray-600 hover:text-gray-900">
@@ -970,6 +885,7 @@ export default function StoreFront() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* ===== LOCATION BUTTON ===== */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -983,6 +899,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
+              {/* Cart Button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -997,6 +914,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
+              {/* ===== USER / AUTH (added Track Orders) ===== */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1019,15 +937,9 @@ export default function StoreFront() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setProfileDialogOpen(true);
-                        fetchUserOrders();
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <User className="w-4 h-4 mr-2" />
-                      My Profile
+                    <DropdownMenuItem onClick={() => { setTrackOrdersOpen(true); fetchUserOrders(); }} className="cursor-pointer">
+                      <Package className="w-4 h-4 mr-2" />
+                      Track Orders
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600">
                       <LogOut className="w-4 h-4 mr-2" />
@@ -1047,6 +959,7 @@ export default function StoreFront() {
                 </Button>
               )}
 
+              {/* Mobile Hamburger */}
               <Button variant="ghost" size="icon" className="md:hidden text-gray-600 h-9 w-9" onClick={() => setMobileMenuOpen(true)}>
                 <Menu className="w-5 h-5" />
               </Button>
@@ -1054,6 +967,7 @@ export default function StoreFront() {
           </div>
         </div>
 
+        {/* Mobile Search */}
         <div className="md:hidden px-3 pb-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1211,7 +1125,9 @@ export default function StoreFront() {
               )}
             </div>
             {!userLocation && (
-              <p className="text-xs text-red-500">⚠️ You must set a location before placing an order.</p>
+              <p className="text-xs text-red-500">
+                ⚠️ You must set a location before placing an order.
+              </p>
             )}
           </div>
           <DialogFooter>
@@ -1226,106 +1142,81 @@ export default function StoreFront() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ PROFILE DIALOG ============ */}
-      <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+      {/* ============ TRACK ORDERS DIALOG ============ */}
+      <Dialog open={trackOrdersOpen} onOpenChange={setTrackOrdersOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <User className="w-5 h-5 text-[#8D6E63]" />
-              My Profile
+              <Package className="w-5 h-5 text-[#8D6E63]" />
+              Your Orders
             </DialogTitle>
-            <DialogDescription>Your account details and order history.</DialogDescription>
+            <DialogDescription>
+              Track the status of your orders.
+            </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl mb-4">
-            <Avatar className="w-16 h-16">
-              <AvatarImage src={session?.user?.image || undefined} />
-              <AvatarFallback className="bg-[#D7CCC8] text-[#8D6E63] text-2xl">
-                {session?.user?.name?.charAt(0).toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-lg font-semibold text-gray-900">{session?.user?.name}</p>
-              <p className="text-sm text-gray-500">{session?.user?.email}</p>
-              {userLocation && (
-                <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                  <MapPinIcon className="w-3 h-3" /> {userLocation}
-                </p>
-              )}
+          {ordersLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-[#8D6E63]" />
             </div>
-          </div>
-          <Separator className="my-2" />
-          <div className="mt-2">
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
-              <Package className="w-4 h-4" /> Your Orders
-            </h3>
-            {ordersLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-[#8D6E63]" />
-              </div>
-            ) : userOrders.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                <p>No orders yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {userOrders.map((order) => (
-                  <Card key={order.id} className="border shadow-none">
-                    <CardContent className="p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
+          ) : userOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+              <p>No orders yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {userOrders.map((order) => (
+                <Card key={order.id} className="border shadow-none">
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                      <Badge className={
+                        order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                        'bg-blue-100 text-blue-800'
+                      }>
+                        {order.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
+                      <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
+                      {order.items && order.items.length > 0 && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          {order.items.map((item, idx) => (
+                            <span key={idx}>
+                              {item.productName} × {item.quantity} {item.unit}
+                              {idx < order.items.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
                         </div>
-                        <Badge
-                          className={
-                            order.status === 'DELIVERED'
-                              ? 'bg-green-100 text-green-800'
-                              : order.status === 'CANCELLED'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }
-                        >
-                          {order.status}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 text-sm">
-                        <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
-                        <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
-                        {order.items && order.items.length > 0 && (
-                          <div className="mt-2 text-xs text-gray-500">
-                            {order.items.map((item, idx) => (
-                              <span key={idx}>
-                                {item.productName} × {item.quantity} {item.unit}
-                                {idx < order.items.length - 1 ? ', ' : ''}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setProfileDialogOpen(false)}>Close</Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setTrackOrdersOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1 w-full">
-        {/* Hero section – unchanged */}
+        {/* ============ HERO ============ */}
         <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none bg-[#D7CCC8] overflow-hidden">
           <AnimatePresence mode="sync">
             <motion.div
@@ -1347,6 +1238,7 @@ export default function StoreFront() {
             </motion.div>
           </AnimatePresence>
           <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/30 to-black/10 sm:bg-linear-to-r sm:from-black/75 sm:via-black/45 sm:to-black/10" />
+
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
             {HERO_BANNERS.map((_, i) => (
               <button
@@ -1359,6 +1251,7 @@ export default function StoreFront() {
               />
             ))}
           </div>
+
           <div className="relative z-10 max-w-7xl mx-auto px-4 xs:px-5 sm:px-8 md:px-14 flex items-center min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none">
             <motion.div
               key={`text-${bannerIndex}`}
@@ -1390,6 +1283,7 @@ export default function StoreFront() {
                     })
                 }
               </p>
+              {/* ─── DELIVERY ESTIMATE ─── */}
               {userLocation && deliveryDistance !== null && (
                 <p
                   className="text-sm xs:text-base sm:text-lg text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm bg-black/30 backdrop-blur-sm rounded-full px-4 py-1.5 inline-block"
@@ -1417,9 +1311,15 @@ export default function StoreFront() {
           <div className="max-w-7xl mx-auto">
             <div
               className="flex gap-2 py-3 overflow-x-auto px-3 sm:px-6 lg:px-8"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                WebkitOverflowScrolling: 'touch',
+              }}
             >
-              <style>{`.no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+              <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+              `}</style>
               <button
                 onClick={() => { setSelectedCategory(null); setSelectedSubcategory(null); }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
@@ -1450,6 +1350,7 @@ export default function StoreFront() {
                 );
               })}
             </div>
+
             <AnimatePresence>
               {currentSubcategories.length > 0 && (
                 <motion.div
@@ -1531,6 +1432,7 @@ export default function StoreFront() {
               ))}
             </div>
           )}
+
           {error && !loading && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
@@ -1541,12 +1443,15 @@ export default function StoreFront() {
               </Button>
             </div>
           )}
+
           {!loading && !error && isBrowseAllView && !searchQuery.trim() && productsByCategory.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Package className="w-16 h-16 text-gray-300 mb-4" />
               <p className="text-lg font-medium text-gray-500">{t('noProducts', language)}</p>
             </div>
           )}
+
+          {/* Browse-all view: grouped by category, each category's products shuffled */}
           {!loading && !error && isBrowseAllView && (
             <div className="space-y-10 sm:space-y-12">
               {productsByCategory.map(({ category, items }) => (
@@ -1573,6 +1478,7 @@ export default function StoreFront() {
                   {renderProductGrid(items)}
                 </div>
               ))}
+
               {searchQuery.trim() && productsByCategory.length === 0 && !loading && (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <Package className="w-16 h-16 text-gray-300 mb-4" />
@@ -1581,6 +1487,8 @@ export default function StoreFront() {
               )}
             </div>
           )}
+
+          {/* Filtered view – shuffled as well */}
           {!loading && !error && !isBrowseAllView && (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -1593,6 +1501,7 @@ export default function StoreFront() {
                   </p>
                 </div>
               </div>
+
               {filteredProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <Package className="w-16 h-16 text-gray-300 mb-4" />
@@ -1625,6 +1534,7 @@ export default function StoreFront() {
                   : 'UK MART brings you fresh and quality grocery products at wholesale prices. We deliver your daily essentials right to your doorstep.'}
               </p>
             </div>
+
             <div>
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
                 {language === 'hi' ? 'श्रेणियाँ' : language === 'bn' ? 'বিভাগ' : 'Quick Links'}
@@ -1642,6 +1552,7 @@ export default function StoreFront() {
                 ))}
               </ul>
             </div>
+
             <div>
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
                 {t('contactUs', language)}
@@ -1669,6 +1580,7 @@ export default function StoreFront() {
             </div>
           </div>
         </div>
+
         <div className="border-t border-gray-800">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <p className="text-xs text-gray-500 text-center sm:text-left">
@@ -1697,6 +1609,7 @@ export default function StoreFront() {
               )}
             </div>
           </SheetHeader>
+
           {cart.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center min-h-0">
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -1722,10 +1635,13 @@ export default function StoreFront() {
                   ))}
                 </div>
               </div>
+
               <div className="border-t bg-gray-50 px-4 sm:px-6 py-4 space-y-3 shrink-0">
                 {!userLocation && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-center">
-                    <p className="text-xs text-red-600">⚠️ Please set your delivery location to place an order.</p>
+                    <p className="text-xs text-red-600">
+                      ⚠️ Please set your delivery location to place an order.
+                    </p>
                     <Button
                       variant="link"
                       size="sm"
@@ -1736,6 +1652,7 @@ export default function StoreFront() {
                     </Button>
                   </div>
                 )}
+
                 {userLocation && minOrderRemaining > 0 && (
                   <div className="bg-[#FFB300]/10 border border-[#FFB300]/30 rounded-lg p-2.5">
                     <p className="text-xs text-[#8D6E63] text-center">
@@ -1746,6 +1663,7 @@ export default function StoreFront() {
                     </p>
                   </div>
                 )}
+
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between text-gray-600">
                     <span>{t('subtotal', language)}</span>
@@ -1781,13 +1699,8 @@ export default function StoreFront() {
                     <span>Minimum order</span>
                     <span className="font-medium text-[#8D6E63]">₹{effectiveMinOrder}</span>
                   </div>
-                  {/* Show COD restriction if total < 2500 */}
-                  {selectedPaymentMethod === 'COD' && cartTotal < BACKEND_MIN_ORDER_FOR_COD && (
-                    <div className="text-[11px] text-red-500 text-center">
-                      COD requires min ₹{BACKEND_MIN_ORDER_FOR_COD}
-                    </div>
-                  )}
                 </div>
+
                 <Button
                   className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                   size="lg"
@@ -1811,13 +1724,15 @@ export default function StoreFront() {
                   {!userLocation
                     ? 'Set Location to Checkout'
                     : cartTotal < effectiveMinOrder
-                    ? `${t('checkout', language)} (₹${effectiveMinOrder})`
-                    : !isAuthenticated
-                    ? 'Sign in to Checkout'
-                    : t('checkout', language)}
+                      ? `${t('checkout', language)} (₹${effectiveMinOrder})`
+                      : !isAuthenticated
+                        ? 'Sign in to Checkout'
+                        : t('checkout', language)}
                 </Button>
                 {!isAuthenticated && cartTotal >= effectiveMinOrder && userLocation && (
-                  <p className="text-xs text-gray-500 text-center">You need to sign in before placing an order.</p>
+                  <p className="text-xs text-gray-500 text-center">
+                    You need to sign in before placing an order.
+                  </p>
                 )}
               </div>
             </>
@@ -1848,10 +1763,11 @@ export default function StoreFront() {
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-500">
                 {checkoutStep === 1 ? 'Enter your delivery address'
-                  : checkoutStep === 2 ? 'Choose your payment method'
+                  : checkoutStep === 2 ? 'Secure payment via Razorpay'
                   : 'Review your order'}
               </DialogDescription>
             </DialogHeader>
+
             <div className="flex items-center gap-2 mt-4 mb-6">
               {[1, 2, 3].map((step) => (
                 <React.Fragment key={step}>
@@ -1908,57 +1824,19 @@ export default function StoreFront() {
 
             {checkoutStep === 2 && (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setSelectedPaymentMethod('RAZORPAY')}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      selectedPaymentMethod === 'RAZORPAY'
-                        ? 'border-[#8D6E63] bg-[#8D6E63]/5 shadow-md'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-[#8D6E63]" />
-                      <span className="font-medium">Pay Online</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Razorpay • Cards, UPI, Netbanking</p>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (isLocalDelivery && cartTotal >= BACKEND_MIN_ORDER_FOR_COD) {
-                        setSelectedPaymentMethod('COD');
-                      } else if (cartTotal < BACKEND_MIN_ORDER_FOR_COD) {
-                        toast.error(`Cash on Delivery requires a minimum order of ₹${BACKEND_MIN_ORDER_FOR_COD}.`);
-                      } else {
-                        toast.error('Cash on Delivery is only available for local deliveries (within 13 km).');
-                      }
-                    }}
-                    disabled={!isLocalDelivery || cartTotal < BACKEND_MIN_ORDER_FOR_COD}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      selectedPaymentMethod === 'COD'
-                        ? 'border-[#8D6E63] bg-[#8D6E63]/5 shadow-md'
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${(!isLocalDelivery || cartTotal < BACKEND_MIN_ORDER_FOR_COD) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
-                      <span className="font-medium">Cash on Delivery</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Pay when you receive your order
-                      {!isLocalDelivery && ' (not available for your area)'}
-                      {cartTotal < BACKEND_MIN_ORDER_FOR_COD && ` (min ₹${BACKEND_MIN_ORDER_FOR_COD})`}
-                    </p>
-                  </button>
-                </div>
-                {(!isLocalDelivery || cartTotal < BACKEND_MIN_ORDER_FOR_COD) && (
-                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                    {!isLocalDelivery
-                      ? `COD is limited to local deliveries within ${LOCAL_RADIUS_KM} km.`
-                      : `COD requires a minimum order of ₹${BACKEND_MIN_ORDER_FOR_COD}.`}
+                <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-200">
+                  <CreditCard className="w-12 h-12 text-[#8D6E63] mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-800">Razorpay</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Pay securely using Credit/Debit Card, UPI, Netbanking, or Wallet.
                   </p>
-                )}
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Badge variant="outline" className="bg-white">Cards</Badge>
+                    <Badge variant="outline" className="bg-white">UPI</Badge>
+                    <Badge variant="outline" className="bg-white">Netbanking</Badge>
+                    <Badge variant="outline" className="bg-white">Wallet</Badge>
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -1971,7 +1849,9 @@ export default function StoreFront() {
                     <p className="text-gray-500">{deliveryForm.address}</p>
                     {deliveryForm.pincode && <p className="text-gray-500">Pincode: {deliveryForm.pincode}</p>}
                     {deliveryForm.notes && <p className="text-gray-400 italic">{deliveryForm.notes}</p>}
-                    {userLocation && <p className="text-xs text-gray-500">📍 {userLocation}</p>}
+                    {userLocation && (
+                      <p className="text-xs text-gray-500">📍 {userLocation}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -2010,15 +1890,14 @@ export default function StoreFront() {
                     <span>{formatPrice(grandTotal)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-500">
-                    <span>Payment</span>
-                    <span className="font-medium">
-                      {selectedPaymentMethod === 'COD' ? 'Cash on Delivery' : 'Razorpay'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
                     <span>Minimum order</span>
                     <span className="font-medium">₹{effectiveMinOrder}</span>
                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="border-[#8D6E63]/30 text-[#8D6E63]">
+                    Razorpay
+                  </Badge>
                 </div>
               </motion.div>
             )}
@@ -2050,12 +1929,12 @@ export default function StoreFront() {
               <Button
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={handlePlaceOrder}
-                disabled={razorpayLoading || placingOrder || cartTotal < effectiveMinOrder || !userLocation}
+                disabled={razorpayLoading || cartTotal < effectiveMinOrder || !userLocation}
               >
-                {razorpayLoading || placingOrder ? (
+                {razorpayLoading ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing</>
                 ) : (
-                  <><CheckCircle2 className="w-4 h-4 mr-2" /> {selectedPaymentMethod === 'COD' ? 'Place Order' : 'Pay Now'}</>
+                  <><CheckCircle2 className="w-4 h-4 mr-2" /> Pay Now</>
                 )}
               </Button>
             )}
@@ -2116,19 +1995,26 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
       : rawAvailableUnits;
 
   const isSingleFixedItem = availableUnits.length <= 1;
+
   const isCustom = !isSingleFixedItem && selectedUnit === 'custom';
   const effectiveUnit = isSingleFixedItem ? (availableUnits[0] || product.baseUnit) : selectedUnit;
-  const displayUnit = isCustom && customWeight ? formatCustomWeight(customWeight, product.unitType) : effectiveUnit;
+  const displayUnit = isCustom && customWeight
+    ? formatCustomWeight(customWeight, product.unitType)
+    : effectiveUnit;
   const unitPrice = displayUnit ? calculatePrice(product.basePrice, product.baseUnit, displayUnit) : 0;
   const pastelColor = getPastelColor(product.name);
   const displayName = getLocalName(product, language);
   const displayDescription = getLocalDescription(product, language);
   const initial = product.name.charAt(0).toUpperCase();
+
   const inStock = product.stock > 0;
 
   return (
     <motion.div
-      variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}
+      variants={{
+        hidden: { opacity: 0, y: 15 },
+        visible: { opacity: 1, y: 0 },
+      }}
       transition={{ duration: 0.3 }}
       className="min-w-0"
     >
@@ -2155,18 +2041,22 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
             </Badge>
           )}
         </div>
+
         <CardContent className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5">
           <h3 className="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2 leading-tight min-h-[2.5em]">
             {displayName}
           </h3>
+
           {displayDescription && (
             <p className="text-[10px] sm:text-[11px] text-gray-500 line-clamp-2 leading-snug">
               {displayDescription}
             </p>
           )}
+
           <p className="text-[11px] sm:text-xs text-gray-400">
             {formatPrice(product.basePrice)} {t('per', language)} {product.baseUnit}
           </p>
+
           {isSingleFixedItem ? (
             <div className="h-7 flex items-center px-2.5 text-xs bg-gray-50 border border-gray-200 rounded-md text-gray-600 font-medium">
               {availableUnits[0] || product.baseUnit}
@@ -2188,6 +2078,7 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
               </SelectContent>
             </Select>
           )}
+
           {isCustom && (
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
@@ -2200,7 +2091,9 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
                     value={customWeight}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === '' || /^\d*\.?\d*$/.test(val)) onCustomWeightChange(val);
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                        onCustomWeightChange(val);
+                      }
                     }}
                     placeholder={getCustomInputPlaceholder(product.unitType)}
                     className="h-7 text-xs pr-12 bg-[#FFB300]/10 border-[#FFB300]/30 focus:border-[#8D6E63] focus:ring-[#8D6E63]"
@@ -2246,12 +2139,14 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
               )}
             </div>
           )}
+
           <p className={`font-bold ${isCustom ? 'text-base sm:text-lg text-[#FFB300]' : 'text-sm sm:text-base text-[#8D6E63]'}`}>
             {displayUnit && unitPrice > 0
               ? <>{formatPrice(unitPrice)} <span className="text-[10px] sm:text-xs font-normal text-gray-400">/ {displayUnit}</span></>
               : <span className="text-[10px] sm:text-xs font-normal text-gray-400">{t('selectUnit', language)}</span>
             }
           </p>
+
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 mt-auto pt-1">
             <Button
               size="sm"
@@ -2259,8 +2154,8 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
                 isAdded
                   ? 'bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/20'
                   : isCustom
-                  ? 'bg-[#FFB300] hover:bg-[#FFB300]/90 text-white'
-                  : 'bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white'
+                    ? 'bg-[#FFB300] hover:bg-[#FFB300]/90 text-white'
+                    : 'bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white'
               }`}
               onClick={onAddToCart}
               disabled={!inStock || (isCustom && (!customWeight || parseFloat(customWeight) <= 0))}
@@ -2271,6 +2166,7 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
                 <><ShoppingCart className="w-3 h-3 mr-1 shrink-0" /> <span className="truncate">{t('addToCart', language)}</span></>
               )}
             </Button>
+
             <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden shrink-0 self-center order-2 sm:order-1">
               <button
                 onClick={() => onQtyChange(Math.max(1, selectedQty - 1))}
@@ -2316,6 +2212,7 @@ function CartItemRow({ item, language, onUpdateQty, onRemove }: CartItemRowProps
           <span className="text-lg font-bold text-gray-300">{initial}</span>
         )}
       </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-1">
           <p className="text-sm font-medium text-gray-900 truncate">{item.productName}</p>
