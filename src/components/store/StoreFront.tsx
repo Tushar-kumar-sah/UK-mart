@@ -315,6 +315,8 @@ export default function StoreFront() {
   });
   const [placingOrder, setPlacingOrder] = useState(false);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
+  // New state for payment method selection
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'RAZORPAY' | 'COD'>('RAZORPAY');
 
   // ── Location dialog ──
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
@@ -326,8 +328,8 @@ export default function StoreFront() {
   const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
   const [isLocalDelivery, setIsLocalDelivery] = useState(false);
 
-  // ── Track orders dialog ──
-  const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
+  // ── Profile dialog (replaces trackOrdersOpen) ──
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -397,7 +399,7 @@ export default function StoreFront() {
     }
   }, [isAuthenticated]);
 
-  // ── Fetch user orders for tracking ──
+  // ── Fetch user orders for profile ──
   const fetchUserOrders = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
     setOrdersLoading(true);
@@ -623,7 +625,7 @@ export default function StoreFront() {
     }
   };
 
-  // ── Place order ──
+  // ── Place order (handles both Razorpay and COD) ──
   const handlePlaceOrder = async () => {
     if (!userLocation) {
       toast.error('Please set your delivery location first.');
@@ -649,34 +651,42 @@ export default function StoreFront() {
       return;
     }
 
-    const orderData = {
-      userId: user?.id || 'guest',
-      items: cart.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        unit: item.unit,
-        pricePerUnit: item.pricePerUnit,
-        totalPrice: item.totalPrice,
-      })),
-      totalAmount: cartTotal,
-      discountAmount: 0,
-      finalAmount: grandTotal,
-      customerName: deliveryForm.name,
-      customerPhone: deliveryForm.phone,
-      deliveryAddress: deliveryForm.address,
-      pincode: deliveryForm.pincode,
-      notes: deliveryForm.notes,
-      paymentMethod: 'RAZORPAY',
-    };
+    // If COD is selected, we bypass Razorpay
+    if (selectedPaymentMethod === 'COD') {
+      await placeOrderCOD();
+      return;
+    }
 
+    // Otherwise, proceed with Razorpay
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
     }
 
+    // Razorpay flow...
     setRazorpayLoading(true);
     try {
+      const orderData = {
+        userId: user?.id || 'guest',
+        items: cart.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unit: item.unit,
+          pricePerUnit: item.pricePerUnit,
+          totalPrice: item.totalPrice,
+        })),
+        totalAmount: cartTotal,
+        discountAmount: 0,
+        finalAmount: grandTotal,
+        customerName: deliveryForm.name,
+        customerPhone: deliveryForm.phone,
+        deliveryAddress: deliveryForm.address,
+        pincode: deliveryForm.pincode,
+        notes: deliveryForm.notes,
+        paymentMethod: 'RAZORPAY',
+      };
+
       const razorpayRes = await fetch('/api/create-razorpay-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -751,6 +761,57 @@ export default function StoreFront() {
       console.error('Razorpay error:', error);
       toast.error('Payment initiation failed');
       setRazorpayLoading(false);
+    }
+  };
+
+  // ── Place order with COD ──
+  const placeOrderCOD = async () => {
+    setPlacingOrder(true);
+    try {
+      const orderData = {
+        userId: user?.id || 'guest',
+        items: cart.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unit: item.unit,
+          pricePerUnit: item.pricePerUnit,
+          totalPrice: item.totalPrice,
+        })),
+        totalAmount: cartTotal,
+        discountAmount: 0,
+        finalAmount: grandTotal,
+        customerName: deliveryForm.name,
+        customerPhone: deliveryForm.phone,
+        deliveryAddress: deliveryForm.address,
+        pincode: deliveryForm.pincode,
+        notes: deliveryForm.notes,
+        paymentMethod: 'COD',
+        paymentStatus: 'PENDING',
+      };
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to place order');
+
+      setOrderSuccessData({ orderId: data.order.id });
+      clearCart();
+      setCheckoutOpen(false);
+      setCheckoutStep(1);
+      setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
+      sessionStorage.removeItem('pendingCheckout');
+      sessionStorage.removeItem('pendingCart');
+      sessionStorage.removeItem('pendingDeliveryForm');
+      toast.success('Order placed successfully! Pay on delivery.');
+    } catch (error) {
+      console.error('COD order error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to place order');
+    } finally {
+      setPlacingOrder(false);
     }
   };
 
@@ -914,7 +975,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
-              {/* ===== USER / AUTH (added Track Orders) ===== */}
+              {/* ===== USER / AUTH (updated with Profile) ===== */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -937,9 +998,15 @@ export default function StoreFront() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => { setTrackOrdersOpen(true); fetchUserOrders(); }} className="cursor-pointer">
-                      <Package className="w-4 h-4 mr-2" />
-                      Track Orders
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setProfileDialogOpen(true);
+                        fetchUserOrders();
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <User className="w-4 h-4 mr-2" />
+                      My Profile
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600">
                       <LogOut className="w-4 h-4 mr-2" />
@@ -1142,74 +1209,109 @@ export default function StoreFront() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ TRACK ORDERS DIALOG ============ */}
-      <Dialog open={trackOrdersOpen} onOpenChange={setTrackOrdersOpen}>
+      {/* ============ PROFILE DIALOG ============ */}
+      <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-[#8D6E63]" />
-              Your Orders
+              <User className="w-5 h-5 text-[#8D6E63]" />
+              My Profile
             </DialogTitle>
             <DialogDescription>
-              Track the status of your orders.
+              Your account details and order history.
             </DialogDescription>
           </DialogHeader>
-          {ordersLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#8D6E63]" />
+
+          {/* User Info */}
+          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl mb-4">
+            <Avatar className="w-16 h-16">
+              <AvatarImage src={session?.user?.image || undefined} />
+              <AvatarFallback className="bg-[#D7CCC8] text-[#8D6E63] text-2xl">
+                {session?.user?.name?.charAt(0).toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="text-lg font-semibold text-gray-900">{session?.user?.name}</p>
+              <p className="text-sm text-gray-500">{session?.user?.email}</p>
+              {userLocation && (
+                <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                  <MapPinIcon className="w-3 h-3" /> {userLocation}
+                </p>
+              )}
             </div>
-          ) : userOrders.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-              <p>No orders yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {userOrders.map((order) => (
-                <Card key={order.id} className="border shadow-none">
-                  <CardContent className="p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                      <Badge className={
-                        order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
-                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                        'bg-blue-100 text-blue-800'
-                      }>
-                        {order.status}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 text-sm">
-                      <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
-                      <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
-                      {order.items && order.items.length > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          {order.items.map((item, idx) => (
-                            <span key={idx}>
-                              {item.productName} × {item.quantity} {item.unit}
-                              {idx < order.items.length - 1 ? ', ' : ''}
-                            </span>
-                          ))}
+          </div>
+
+          <Separator className="my-2" />
+
+          {/* Orders Section */}
+          <div className="mt-2">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
+              <Package className="w-4 h-4" /> Your Orders
+            </h3>
+            {ordersLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-[#8D6E63]" />
+              </div>
+            ) : userOrders.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <p>No orders yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                {userOrders.map((order) => (
+                  <Card key={order.id} className="border shadow-none">
+                    <CardContent className="p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTrackOrdersOpen(false)}>Close</Button>
+                        <Badge
+                          className={
+                            order.status === 'DELIVERED'
+                              ? 'bg-green-100 text-green-800'
+                              : order.status === 'CANCELLED'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }
+                        >
+                          {order.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-sm">
+                        <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
+                        <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
+                        {order.items && order.items.length > 0 && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            {order.items.map((item, idx) => (
+                              <span key={idx}>
+                                {item.productName} × {item.quantity} {item.unit}
+                                {idx < order.items.length - 1 ? ', ' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="ghost" onClick={() => setProfileDialogOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1763,7 +1865,7 @@ export default function StoreFront() {
               </DialogTitle>
               <DialogDescription className="text-sm text-gray-500">
                 {checkoutStep === 1 ? 'Enter your delivery address'
-                  : checkoutStep === 2 ? 'Secure payment via Razorpay'
+                  : checkoutStep === 2 ? 'Choose your payment method'
                   : 'Review your order'}
               </DialogDescription>
             </DialogHeader>
@@ -1824,19 +1926,55 @@ export default function StoreFront() {
 
             {checkoutStep === 2 && (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-200">
-                  <CreditCard className="w-12 h-12 text-[#8D6E63] mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-gray-800">Razorpay</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Pay securely using Credit/Debit Card, UPI, Netbanking, or Wallet.
-                  </p>
-                  <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    <Badge variant="outline" className="bg-white">Cards</Badge>
-                    <Badge variant="outline" className="bg-white">UPI</Badge>
-                    <Badge variant="outline" className="bg-white">Netbanking</Badge>
-                    <Badge variant="outline" className="bg-white">Wallet</Badge>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Razorpay option */}
+                  <button
+                    onClick={() => setSelectedPaymentMethod('RAZORPAY')}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      selectedPaymentMethod === 'RAZORPAY'
+                        ? 'border-[#8D6E63] bg-[#8D6E63]/5 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-[#8D6E63]" />
+                      <span className="font-medium">Pay Online</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Razorpay • Cards, UPI, Netbanking</p>
+                  </button>
+
+                  {/* COD option – only if local delivery */}
+                  <button
+                    onClick={() => {
+                      if (isLocalDelivery) {
+                        setSelectedPaymentMethod('COD');
+                      } else {
+                        toast.error('Cash on Delivery is only available for local deliveries (within 13 km).');
+                      }
+                    }}
+                    disabled={!isLocalDelivery}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      selectedPaymentMethod === 'COD'
+                        ? 'border-[#8D6E63] bg-[#8D6E63]/5 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300'
+                    } ${!isLocalDelivery ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <span className="font-medium">Cash on Delivery</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Pay when you receive your order
+                      {!isLocalDelivery && ' (not available for your area)'}
+                    </p>
+                  </button>
                 </div>
+
+                {!isLocalDelivery && (
+                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    ⚠️ COD is limited to local deliveries within {LOCAL_RADIUS_KM} km. Please use online payment.
+                  </p>
+                )}
               </motion.div>
             )}
 
@@ -1890,14 +2028,15 @@ export default function StoreFront() {
                     <span>{formatPrice(grandTotal)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-500">
+                    <span>Payment</span>
+                    <span className="font-medium">
+                      {selectedPaymentMethod === 'COD' ? 'Cash on Delivery' : 'Razorpay'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
                     <span>Minimum order</span>
                     <span className="font-medium">₹{effectiveMinOrder}</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-[#8D6E63]/30 text-[#8D6E63]">
-                    Razorpay
-                  </Badge>
                 </div>
               </motion.div>
             )}
@@ -1929,12 +2068,12 @@ export default function StoreFront() {
               <Button
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={handlePlaceOrder}
-                disabled={razorpayLoading || cartTotal < effectiveMinOrder || !userLocation}
+                disabled={razorpayLoading || placingOrder || cartTotal < effectiveMinOrder || !userLocation}
               >
-                {razorpayLoading ? (
+                {razorpayLoading || placingOrder ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing</>
                 ) : (
-                  <><CheckCircle2 className="w-4 h-4 mr-2" /> Pay Now</>
+                  <><CheckCircle2 className="w-4 h-4 mr-2" /> {selectedPaymentMethod === 'COD' ? 'Place Order' : 'Pay Now'}</>
                 )}
               </Button>
             )}
