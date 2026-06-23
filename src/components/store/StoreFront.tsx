@@ -326,7 +326,7 @@ export default function StoreFront() {
     name: '', phone: '', address: '', pincode: '', notes: '',
   });
   const [razorpayLoading, setRazorpayLoading] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('RAZORPAY'); // RAZORPAY | COD
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('RAZORPAY');
 
   // ── Location dialog ──
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
@@ -534,8 +534,7 @@ export default function StoreFront() {
       async (position) => {
         const { latitude, longitude } = position.coords;
         try {
-          // Reverse geocode to get address (optional, but we can show lat/lng)
-          // For demo, we'll show coordinates and also attempt to get address via Google Maps.
+          // Reverse geocode to get address
           const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
           const geoRes = await fetch(geoUrl);
           const geoData = await geoRes.json();
@@ -657,19 +656,17 @@ export default function StoreFront() {
       pincode: deliveryForm.pincode,
       notes: deliveryForm.notes,
       paymentMethod: selectedPaymentMethod,
+      minOrder: effectiveMinOrder, // ✅ send minOrder for backend validation
     };
 
-    // If COD, directly place order without Razorpay
+    // ── COD flow ──
     if (selectedPaymentMethod === 'COD') {
       setRazorpayLoading(true);
       try {
         const res = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...orderData,
-            paymentStatus: 'PENDING', // for COD we set as pending
-          }),
+          body: JSON.stringify(orderData),
         });
         const result = await res.json();
         if (!res.ok) {
@@ -685,7 +682,7 @@ export default function StoreFront() {
         sessionStorage.removeItem('pendingCart');
         sessionStorage.removeItem('pendingDeliveryForm');
         toast.success('Order placed successfully! We will confirm shortly.');
-        setSelectedPaymentMethod('RAZORPAY'); // reset
+        setSelectedPaymentMethod('RAZORPAY');
       } catch (error) {
         console.error('COD order error:', error);
         toast.error('Failed to place order');
@@ -695,7 +692,7 @@ export default function StoreFront() {
       return;
     }
 
-    // Razorpay flow
+    // ── Razorpay flow ──
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
@@ -746,7 +743,6 @@ export default function StoreFront() {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
-                paymentStatus: 'PAID',
               }),
             });
             const verifyData = await verifyRes.json();
