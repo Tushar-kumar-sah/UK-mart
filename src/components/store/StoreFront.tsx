@@ -320,7 +320,6 @@ export default function StoreFront() {
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [locationInput, setLocationInput] = useState('');
   const [locationLoading, setLocationLoading] = useState(false);
-  const [locationPrompted, setLocationPrompted] = useState(false);
 
   // ── Delivery estimate ──
   const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
@@ -363,17 +362,7 @@ export default function StoreFront() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Location pop‑up after 7 seconds ──
-  useEffect(() => {
-    if (!loading && !userLocation && !locationPrompted) {
-      const timer = setTimeout(() => {
-        setLocationPrompted(true);
-        setLocationDialogOpen(true);
-        toast.info('Please set your delivery location to place orders.');
-      }, 7000);
-      return () => clearTimeout(timer);
-    }
-  }, [loading, userLocation, locationPrompted]);
+  // ── REMOVED: auto location popup (no longer appears on home page) ──
 
   // ── Restore pending checkout after sign‑in ──
   useEffect(() => {
