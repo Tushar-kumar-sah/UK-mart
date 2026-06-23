@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ShoppingCart, X, Minus, Plus, Trash2, ChevronRight, ChevronDown,
   ShoppingBag, Globe, LogOut, User, Package, MapPin, Phone,
   CreditCard, CheckCircle2, Menu, ArrowRight, Loader2, AlertCircle,
-  MapPin as MapPinIcon,
+  MapPin as MapPinIcon, Star, Calendar, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -88,6 +88,7 @@ interface Order {
   createdAt: string;
   items: OrderItem[];
   user: { id: string; name: string; email: string; phone: string } | null;
+  rating?: { rating: number; review: string | null } | null;
 }
 
 interface OrderItem {
@@ -116,7 +117,6 @@ interface Offer {
 // ─── Constants ──────────────────────────────────────────
 const DEFAULT_MIN_ORDER = 2500;
 const LOCAL_MIN_ORDER = 1000;
-const LOCAL_RADIUS_KM = 13;
 const FREE_DELIVERY_THRESHOLD = 5000;
 const DELIVERY_CHARGE = 50;
 
@@ -313,7 +313,6 @@ export default function StoreFront() {
   const [deliveryForm, setDeliveryForm] = useState({
     name: '', phone: '', address: '', pincode: '', notes: '',
   });
-  const [placingOrder, setPlacingOrder] = useState(false);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
 
   // ── Location dialog ──
@@ -325,10 +324,17 @@ export default function StoreFront() {
   const [deliveryDistance, setDeliveryDistance] = useState<number | null>(null);
   const [isLocalDelivery, setIsLocalDelivery] = useState(false);
 
-  // ── Track orders dialog ──
-  const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
+  // ── Profile / Orders / Rating ──
+  const [profileOpen, setProfileOpen] = useState(false);
   const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [userDetails, setUserDetails] = useState({ name: '', email: '', phone: '' });
+
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   // ── Product unit selections ──
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
@@ -362,31 +368,7 @@ export default function StoreFront() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── REMOVED: auto location popup (no longer appears on home page) ──
-
-  // ── Restore pending checkout after sign‑in ──
-  useEffect(() => {
-    const pending = sessionStorage.getItem('pendingCheckout');
-    if (pending === 'true' && isAuthenticated) {
-      const savedCart = sessionStorage.getItem('pendingCart');
-      if (savedCart) {
-        const items = JSON.parse(savedCart) as CartItem[];
-        clearCart();
-        items.forEach((item) => addToCart(item));
-      }
-      const savedDelivery = sessionStorage.getItem('pendingDeliveryForm');
-      if (savedDelivery) {
-        setDeliveryForm(JSON.parse(savedDelivery));
-      }
-      setCheckoutStep(3);
-      setCheckoutOpen(true);
-      sessionStorage.removeItem('pendingCheckout');
-      sessionStorage.removeItem('pendingCart');
-      sessionStorage.removeItem('pendingDeliveryForm');
-    }
-  }, [isAuthenticated]);
-
-  // ── Fetch user orders for tracking ──
+  // ── Fetch user orders ──
   const fetchUserOrders = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
     setOrdersLoading(true);
@@ -408,7 +390,61 @@ export default function StoreFront() {
     }
   }, [isAuthenticated, user?.id]);
 
-  // ── Filtered products (shuffled) ──
+  // ── Fetch user profile ──
+  const fetchUserProfile = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await fetch('/api/user/profile');
+      if (res.ok) {
+        const data = await res.json();
+        setUserDetails(data);
+      } else {
+        setUserDetails({
+          name: session?.user?.name || '',
+          email: session?.user?.email || '',
+          phone: (session?.user as any)?.phone || '',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile', error);
+    }
+  }, [isAuthenticated, session]);
+
+  // ── Submit rating ──
+  const handleSubmitRating = async () => {
+    if (!selectedOrderId || ratingValue === 0) {
+      toast.error('Please select a rating');
+      return;
+    }
+    setSubmittingRating(true);
+    try {
+      const res = await fetch('/api/orders/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: selectedOrderId,
+          rating: ratingValue,
+          review: reviewText,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Thank you for your rating!');
+        setRatingOpen(false);
+        setRatingValue(0);
+        setReviewText('');
+        fetchUserOrders();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to submit rating');
+      }
+    } catch (error) {
+      toast.error('Something went wrong');
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
+  // ── Filtered products ──
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => p.isActive);
     if (selectedCategory) {
@@ -443,7 +479,7 @@ export default function StoreFront() {
     return (cat?.children || []).filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   }, [categories, selectedCategory]);
 
-  // ── Products grouped by category (shuffled per category) ──
+  // ── Products grouped by category ──
   const productsByCategory = useMemo(() => {
     const activeProducts = products.filter((p) => p.isActive);
     const groups: { category: Category; items: Product[] }[] = [];
@@ -743,7 +779,7 @@ export default function StoreFront() {
     }
   };
 
-  // ── Scroll to products on category select ──
+  // ── Scroll to products ──
   useEffect(() => {
     if (selectedCategory) {
       document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -874,7 +910,7 @@ export default function StoreFront() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* ===== LOCATION BUTTON ===== */}
+              {/* Location Button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -903,7 +939,7 @@ export default function StoreFront() {
                 )}
               </Button>
 
-              {/* ===== USER / AUTH (added Track Orders) ===== */}
+              {/* User Dropdown */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -926,9 +962,16 @@ export default function StoreFront() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => { setTrackOrdersOpen(true); fetchUserOrders(); }} className="cursor-pointer">
-                      <Package className="w-4 h-4 mr-2" />
-                      Track Orders
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setProfileOpen(true);
+                        fetchUserProfile();
+                        fetchUserOrders();
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <User className="w-4 h-4 mr-2" />
+                      My Profile
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600">
                       <LogOut className="w-4 h-4 mr-2" />
@@ -989,6 +1032,7 @@ export default function StoreFront() {
               <span className="text-lg font-bold text-[#8D6E63]">{t('storeName', language)}</span>
             </div>
             <Separator className="mb-4" />
+
             <div className="mb-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('language', language)}</p>
               <div className="flex gap-2">
@@ -1008,8 +1052,9 @@ export default function StoreFront() {
               </div>
             </div>
             <Separator className="mb-4" />
+
             {isAuthenticated ? (
-              <div className="mb-4">
+              <div className="space-y-3">
                 <div className="flex items-center gap-3 mb-3">
                   <Avatar className="w-10 h-10">
                     <AvatarImage src={session.user?.image || undefined} />
@@ -1022,13 +1067,44 @@ export default function StoreFront() {
                     <p className="text-xs text-gray-500">{session.user?.email}</p>
                   </div>
                 </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-gray-700 border-gray-200 hover:bg-gray-50"
+                  onClick={() => {
+                    setProfileOpen(true);
+                    fetchUserProfile();
+                    fetchUserOrders();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  My Profile
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-gray-700 border-gray-200 hover:bg-gray-50"
+                  onClick={() => {
+                    setProfileOpen(true);
+                    fetchUserOrders();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <Package className="w-4 h-4 mr-2" />
+                  Order History
+                </Button>
+
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
                   onClick={() => { signOut(); setMobileMenuOpen(false); }}
                 >
-                  <LogOut className="w-4 h-4 mr-2" /> {t('logout', language)}
+                  <LogOut className="w-4 h-4 mr-2" />
+                  {t('logout', language)}
                 </Button>
               </div>
             ) : (
@@ -1131,81 +1207,180 @@ export default function StoreFront() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ TRACK ORDERS DIALOG ============ */}
-      <Dialog open={trackOrdersOpen} onOpenChange={setTrackOrdersOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+      {/* ============ PROFILE DIALOG ============ */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-[#8D6E63]" />
-              Your Orders
+              <User className="w-5 h-5 text-[#8D6E63]" />
+              My Profile
             </DialogTitle>
-            <DialogDescription>
-              Track the status of your orders.
-            </DialogDescription>
+            <DialogDescription>Your account details and order history</DialogDescription>
           </DialogHeader>
-          {ordersLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#8D6E63]" />
+          <div className="space-y-6">
+            {/* User Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div>
+                <Label className="text-xs text-gray-500">Full Name</Label>
+                <p className="font-medium">{userDetails.name || 'Not set'}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500">Email</Label>
+                <p className="font-medium">{userDetails.email || 'Not set'}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500">Phone</Label>
+                <p className="font-medium">{userDetails.phone || 'Not set'}</p>
+              </div>
             </div>
-          ) : userOrders.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-              <p>No orders yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {userOrders.map((order) => (
-                <Card key={order.id} className="border shadow-none">
-                  <CardContent className="p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                      <Badge className={
-                        order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
-                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                        'bg-blue-100 text-blue-800'
-                      }>
-                        {order.status}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 text-sm">
-                      <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
-                      <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
-                      {order.items && order.items.length > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          {order.items.map((item, idx) => (
-                            <span key={idx}>
-                              {item.productName} × {item.quantity} {item.unit}
-                              {idx < order.items.length - 1 ? ', ' : ''}
-                            </span>
-                          ))}
+
+            {/* Order History */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Order History</h3>
+              {ordersLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#8D6E63]" />
+                </div>
+              ) : userOrders.length === 0 ? (
+                <p className="text-gray-500 text-sm">You haven't placed any orders yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {userOrders.map((order) => (
+                    <Card key={order.id} className="border shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium">Order #{order.id.slice(0, 8)}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                              <Clock className="w-3 h-3 ml-1" />
+                              {new Date(order.createdAt).toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </div>
+                          </div>
+                          <Badge className={
+                            order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+                            order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                            'bg-blue-100 text-blue-800'
+                          }>
+                            {order.status}
+                          </Badge>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                        <div className="mt-2 text-sm">
+                          <p className="text-gray-600">Total: {formatPrice(order.finalAmount)}</p>
+                          <p className="text-gray-500 text-xs">Payment: {order.paymentMethod} • {order.paymentStatus}</p>
+                          {order.items && order.items.length > 0 && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              {order.items.map((item, idx) => (
+                                <span key={idx}>
+                                  {item.productName} × {item.quantity} {item.unit}
+                                  {idx < order.items.length - 1 ? ', ' : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {order.rating && (
+                            <div className="mt-2 flex items-center gap-1">
+                              <span className="text-xs text-gray-500">Your rating:</span>
+                              <div className="flex text-yellow-500">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star key={star} className={`w-3 h-3 ${star <= (order.rating?.rating || 0) ? 'fill-yellow-500' : ''}`} />
+                                ))}
+                              </div>
+                              {order.rating?.review && (
+                                <span className="text-xs text-gray-400 ml-1">“{order.rating.review}”</span>
+                              )}
+                            </div>
+                          )}
+                          {order.status === 'DELIVERED' && !order.rating && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-2 text-xs border-[#8D6E63] text-[#8D6E63] hover:bg-[#D7CCC8]"
+                              onClick={() => {
+                                setSelectedOrderId(order.id);
+                                setRatingValue(0);
+                                setReviewText('');
+                                setRatingOpen(true);
+                              }}
+                            >
+                              <Star className="w-3 h-3 mr-1" />
+                              Rate this order
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setProfileOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ RATING DIALOG ============ */}
+      <Dialog open={ratingOpen} onOpenChange={setRatingOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+              Rate your order
+            </DialogTitle>
+            <DialogDescription>How was your experience with this order?</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex justify-center gap-2 py-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRatingValue(star)}
+                  className="text-3xl transition-transform hover:scale-125 focus:outline-none"
+                >
+                  <span className={star <= ratingValue ? 'text-yellow-500' : 'text-gray-300'}>
+                    ★
+                  </span>
+                </button>
               ))}
             </div>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTrackOrdersOpen(false)}>Close</Button>
+            <div className="space-y-2">
+              <Label htmlFor="review">Review (optional)</Label>
+              <Textarea
+                id="review"
+                placeholder="Share your experience..."
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRatingOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+              onClick={handleSubmitRating}
+              disabled={submittingRating || ratingValue === 0}
+            >
+              {submittingRating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Submit Rating
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1 w-full">
-        {/* ============ HERO ============ */}
+        {/* Hero */}
         <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none bg-[#D7CCC8] overflow-hidden">
           <AnimatePresence mode="sync">
             <motion.div
@@ -1272,7 +1447,6 @@ export default function StoreFront() {
                     })
                 }
               </p>
-              {/* ─── DELIVERY ESTIMATE ─── */}
               {userLocation && deliveryDistance !== null && (
                 <p
                   className="text-sm xs:text-base sm:text-lg text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm bg-black/30 backdrop-blur-sm rounded-full px-4 py-1.5 inline-block"
@@ -1295,7 +1469,7 @@ export default function StoreFront() {
           </div>
         </section>
 
-        {/* ============ CATEGORY BAR ============ */}
+        {/* Category Bar */}
         <section className="border-b border-gray-100 bg-white sticky top-14 sm:top-16 z-40">
           <div className="max-w-7xl mx-auto">
             <div
@@ -1386,7 +1560,7 @@ export default function StoreFront() {
           </div>
         </section>
 
-        {/* ============ MIN ORDER REMINDER ============ */}
+        {/* Min Order Reminder */}
         {cartCount > 0 && minOrderRemaining > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -1405,7 +1579,7 @@ export default function StoreFront() {
           </motion.div>
         )}
 
-        {/* ============ PRODUCT SECTION ============ */}
+        {/* Product Section */}
         <section id="product-section" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
           {loading && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
@@ -1440,7 +1614,7 @@ export default function StoreFront() {
             </div>
           )}
 
-          {/* Browse-all view: grouped by category, each category's products shuffled */}
+          {/* Browse-all view */}
           {!loading && !error && isBrowseAllView && (
             <div className="space-y-10 sm:space-y-12">
               {productsByCategory.map(({ category, items }) => (
@@ -1467,17 +1641,10 @@ export default function StoreFront() {
                   {renderProductGrid(items)}
                 </div>
               ))}
-
-              {searchQuery.trim() && productsByCategory.length === 0 && !loading && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <Package className="w-16 h-16 text-gray-300 mb-4" />
-                  <p className="text-lg font-medium text-gray-500">{t('noProducts', language)}</p>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Filtered view – shuffled as well */}
+          {/* Filtered view */}
           {!loading && !error && !isBrowseAllView && (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -1490,7 +1657,6 @@ export default function StoreFront() {
                   </p>
                 </div>
               </div>
-
               {filteredProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <Package className="w-16 h-16 text-gray-300 mb-4" />
