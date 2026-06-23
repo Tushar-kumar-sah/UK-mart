@@ -8,7 +8,7 @@ datasource db {
 }
 
 // ============================================================
-// Models – unchanged
+// Models
 // ============================================================
 
 model User {
@@ -24,6 +24,7 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   orders         Order[]
+  ratings        Rating[]
 }
 
 model Category {
@@ -84,6 +85,9 @@ model Order {
   notes           String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+
+  // One-to-one optional rating
+  rating          Rating?      // each order can have at most one rating
 }
 
 model OrderItem {
@@ -111,4 +115,23 @@ model Offer {
   startDate      DateTime?
   endDate        DateTime?
   createdAt      DateTime  @default(now())
+}
+
+// ============================================================
+// NEW: Rating model
+// ============================================================
+model Rating {
+  id        String   @id @default(uuid())
+  orderId   String   @unique   // one rating per order
+  userId    String
+  rating    Int                // 1 to 5
+  review    String?            // optional text review
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id])
+  user  User @relation(fields: [userId], references: [id])
+
+  // Ensure an order can have only one rating (handled by @unique)
 }

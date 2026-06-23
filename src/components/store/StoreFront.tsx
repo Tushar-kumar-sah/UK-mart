@@ -260,6 +260,18 @@ export default function StoreFront() {
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
+  // ── Clear location on page unload (so user must re‑set each visit) ──
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      setUserLocation(null);
+      setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [setUserLocation, setEffectiveMinOrder]);
+
   // ── Sync session ──
   useEffect(() => {
     if (session?.user) {
@@ -314,10 +326,10 @@ export default function StoreFront() {
     name: '', phone: '', address: '', pincode: '', notes: '',
   });
   const [razorpayLoading, setRazorpayLoading] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('RAZORPAY'); // RAZORPAY | COD
 
   // ── Location dialog ──
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
-  const [locationInput, setLocationInput] = useState('');
   const [locationLoading, setLocationLoading] = useState(false);
 
   // ── Delivery estimate ──
@@ -512,56 +524,6 @@ export default function StoreFront() {
   const grandTotal = cartTotal + deliveryCharge;
 
   // ── Location functions ──
-  const updateLocationAndMinOrder = useCallback(async (address: string) => {
-    if (!address || address.length < 3) {
-      setUserLocation(null);
-      setEffectiveMinOrder(DEFAULT_MIN_ORDER);
-      setDeliveryDistance(null);
-      setIsLocalDelivery(false);
-      toast.info('Location cleared');
-      return;
-    }
-
-    setLocationLoading(true);
-    try {
-      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
-      const geoRes = await fetch(geoUrl);
-      const geoData = await geoRes.json();
-      if (!geoData.results || geoData.results.length === 0) {
-        toast.error('Could not find this address. Please check it.');
-        return;
-      }
-      const { lat, lng } = geoData.results[0].geometry.location;
-
-      const distRes = await fetch('/api/distance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat, lng }),
-      });
-      const distData = await distRes.json();
-      if (distRes.ok) {
-        const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
-        setUserLocation(address);
-        setEffectiveMinOrder(minOrder);
-        setDeliveryDistance(distData.distance);
-        setIsLocalDelivery(distData.isLocal);
-        toast.success(
-          distData.isLocal
-            ? `✅ Local! Min order ₹${LOCAL_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
-            : `📍 Standard min order ₹${DEFAULT_MIN_ORDER} (${distData.distance.toFixed(1)} km)`
-        );
-        setLocationDialogOpen(false);
-      } else {
-        toast.error('Could not calculate distance. Please try again.');
-      }
-    } catch (error) {
-      console.error('Location error:', error);
-      toast.error('Failed to set location');
-    } finally {
-      setLocationLoading(false);
-    }
-  }, [setUserLocation, setEffectiveMinOrder]);
-
   const detectLocation = useCallback(() => {
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by your browser.');
@@ -572,6 +534,17 @@ export default function StoreFront() {
       async (position) => {
         const { latitude, longitude } = position.coords;
         try {
+          // Reverse geocode to get address (optional, but we can show lat/lng)
+          // For demo, we'll show coordinates and also attempt to get address via Google Maps.
+          const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+          const geoRes = await fetch(geoUrl);
+          const geoData = await geoRes.json();
+          let address = `📍 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          if (geoData.results && geoData.results.length > 0) {
+            address = geoData.results[0].formatted_address;
+          }
+
+          // Calculate distance and min order
           const distRes = await fetch('/api/distance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -580,7 +553,7 @@ export default function StoreFront() {
           const distData = await distRes.json();
           if (distRes.ok) {
             const minOrder = distData.isLocal ? LOCAL_MIN_ORDER : DEFAULT_MIN_ORDER;
-            setUserLocation(`📍 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+            setUserLocation(address);
             setEffectiveMinOrder(minOrder);
             setDeliveryDistance(distData.distance);
             setIsLocalDelivery(distData.isLocal);
@@ -605,15 +578,6 @@ export default function StoreFront() {
         setLocationLoading(false);
       }
     );
-  }, [setUserLocation, setEffectiveMinOrder]);
-
-  const clearLocation = useCallback(() => {
-    setUserLocation(null);
-    setEffectiveMinOrder(DEFAULT_MIN_ORDER);
-    setDeliveryDistance(null);
-    setIsLocalDelivery(false);
-    toast.info('Location removed');
-    setLocationDialogOpen(true);
   }, [setUserLocation, setEffectiveMinOrder]);
 
   // ── Add to cart ──
@@ -692,9 +656,46 @@ export default function StoreFront() {
       deliveryAddress: deliveryForm.address,
       pincode: deliveryForm.pincode,
       notes: deliveryForm.notes,
-      paymentMethod: 'RAZORPAY',
+      paymentMethod: selectedPaymentMethod,
     };
 
+    // If COD, directly place order without Razorpay
+    if (selectedPaymentMethod === 'COD') {
+      setRazorpayLoading(true);
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...orderData,
+            paymentStatus: 'PENDING', // for COD we set as pending
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          toast.error(result.error || 'Failed to place order');
+          return;
+        }
+        setOrderSuccessData({ orderId: result.id });
+        clearCart();
+        setCheckoutOpen(false);
+        setCheckoutStep(1);
+        setDeliveryForm({ name: '', phone: '', address: '', pincode: '', notes: '' });
+        sessionStorage.removeItem('pendingCheckout');
+        sessionStorage.removeItem('pendingCart');
+        sessionStorage.removeItem('pendingDeliveryForm');
+        toast.success('Order placed successfully! We will confirm shortly.');
+        setSelectedPaymentMethod('RAZORPAY'); // reset
+      } catch (error) {
+        console.error('COD order error:', error);
+        toast.error('Failed to place order');
+      } finally {
+        setRazorpayLoading(false);
+      }
+      return;
+    }
+
+    // Razorpay flow
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
@@ -745,6 +746,7 @@ export default function StoreFront() {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
+                paymentStatus: 'PAID',
               }),
             });
             const verifyData = await verifyRes.json();
@@ -761,6 +763,7 @@ export default function StoreFront() {
             sessionStorage.removeItem('pendingCart');
             sessionStorage.removeItem('pendingDeliveryForm');
             toast.success('Payment successful! Order placed.');
+            setSelectedPaymentMethod('RAZORPAY');
           } catch (err) {
             console.error('Verification error:', err);
             toast.error('Payment verification failed');
@@ -1119,7 +1122,7 @@ export default function StoreFront() {
         </SheetContent>
       </Sheet>
 
-      {/* ============ LOCATION DIALOG ============ */}
+      {/* ============ LOCATION DIALOG (only "Detect my location") ============ */}
       <Dialog
         open={locationDialogOpen}
         onOpenChange={(open) => {
@@ -1140,44 +1143,31 @@ export default function StoreFront() {
             <DialogDescription>
               {userLocation
                 ? 'Your location is set. You can change it here.'
-                : '📍 Please enter your address or use your current location. This is required to place orders.'}
+                : '📍 Use your current location to check service availability.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="location-input">Delivery Address</Label>
-              <Input
-                id="location-input"
-                placeholder="e.g., 123 Main Street, Kolkata"
-                value={locationInput}
-                onChange={(e) => setLocationInput(e.target.value)}
-                disabled={locationLoading}
-              />
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="default"
-                className="flex-1 bg-[#8D6E63] hover:bg-[#8D6E63]/90"
-                onClick={() => updateLocationAndMinOrder(locationInput)}
-                disabled={!locationInput.trim() || locationLoading}
-              >
-                {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Save Address
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={detectLocation}
-                disabled={locationLoading}
-              >
-                {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Detect my location
-              </Button>
-            </div>
+            {/* Only "Detect my location" button */}
+            <Button
+              variant="default"
+              className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90"
+              onClick={detectLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Detect my location
+            </Button>
+
             {userLocation && (
               <div className="flex items-center justify-between text-sm text-gray-500 border-t pt-3 mt-2">
                 <span className="truncate">📍 {userLocation}</span>
-                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={clearLocation}>
+                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => {
+                  setUserLocation(null);
+                  setEffectiveMinOrder(DEFAULT_MIN_ORDER);
+                  setDeliveryDistance(null);
+                  setIsLocalDelivery(false);
+                  toast.info('Location removed');
+                }}>
                   <X className="w-3 h-3 mr-1" /> Remove
                 </Button>
               </div>
@@ -1200,7 +1190,7 @@ export default function StoreFront() {
               <Button variant="ghost" onClick={() => setLocationDialogOpen(false)}>Close</Button>
             ) : (
               <Button variant="ghost" disabled className="text-gray-400 cursor-not-allowed">
-                Please set a location first
+                Please detect location first
               </Button>
             )}
           </DialogFooter>
@@ -1980,17 +1970,26 @@ export default function StoreFront() {
             {checkoutStep === 2 && (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
                 <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-200">
-                  <CreditCard className="w-12 h-12 text-[#8D6E63] mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-gray-800">Razorpay</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Pay securely using Credit/Debit Card, UPI, Netbanking, or Wallet.
-                  </p>
-                  <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    <Badge variant="outline" className="bg-white">Cards</Badge>
-                    <Badge variant="outline" className="bg-white">UPI</Badge>
-                    <Badge variant="outline" className="bg-white">Netbanking</Badge>
-                    <Badge variant="outline" className="bg-white">Wallet</Badge>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Payment Method</h3>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedPaymentMethod('RAZORPAY')}>
+                      <input type="radio" name="payment" value="RAZORPAY" checked={selectedPaymentMethod === 'RAZORPAY'} onChange={() => setSelectedPaymentMethod('RAZORPAY')} className="w-4 h-4 text-[#8D6E63]" />
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-[#8D6E63]" />
+                        <span>Razorpay (Card, UPI, Netbanking)</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedPaymentMethod('COD')}>
+                      <input type="radio" name="payment" value="COD" checked={selectedPaymentMethod === 'COD'} onChange={() => setSelectedPaymentMethod('COD')} className="w-4 h-4 text-[#8D6E63]" />
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                        <span>Cash on Delivery (COD)</span>
+                      </div>
+                    </div>
                   </div>
+                  {selectedPaymentMethod === 'COD' && (
+                    <p className="text-xs text-gray-500 mt-3">Pay when you receive your order. No advance payment required.</p>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -2051,7 +2050,7 @@ export default function StoreFront() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="border-[#8D6E63]/30 text-[#8D6E63]">
-                    Razorpay
+                    {selectedPaymentMethod === 'COD' ? 'Cash on Delivery' : 'Razorpay'}
                   </Badge>
                 </div>
               </motion.div>
@@ -2089,7 +2088,7 @@ export default function StoreFront() {
                 {razorpayLoading ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing</>
                 ) : (
-                  <><CheckCircle2 className="w-4 h-4 mr-2" /> Pay Now</>
+                  <><CheckCircle2 className="w-4 h-4 mr-2" /> {selectedPaymentMethod === 'COD' ? 'Place Order' : 'Pay Now'}</>
                 )}
               </Button>
             )}
