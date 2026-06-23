@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Language } from './i18n';
+import { persist } from 'zustand/middleware';
 
 export interface CartItem {
   productId: string;
@@ -12,27 +11,24 @@ export interface CartItem {
   totalPrice: number;
 }
 
-export interface User {
+export interface OrderSuccessData {
+  orderId: string;
+}
+
+export type Language = 'en' | 'hi' | 'bn';
+
+interface User {
   id: string;
   name: string;
   email: string;
-  avatar?: string | null;
-  phone?: string | null;
-  role: string;
+  avatar?: string;
+  role: 'customer' | 'admin';
 }
 
-interface StoreState {
+export interface StoreState {
   // Language
   language: Language;
   setLanguage: (lang: Language) => void;
-
-  // View
-  currentView: 'store' | 'admin';
-  setCurrentView: (view: 'store' | 'admin') => void;
-
-  // Auth
-  user: User | null;
-  setUser: (user: User | null) => void;
 
   // Cart
   cart: CartItem[];
@@ -44,28 +40,32 @@ interface StoreState {
   getCartCount: () => number;
   getMinOrderRemaining: () => number;
 
-  // UI
+  // UI toggles
   cartOpen: boolean;
   setCartOpen: (open: boolean) => void;
   checkoutOpen: boolean;
   setCheckoutOpen: (open: boolean) => void;
-  orderSuccessData: { orderId: string } | null;
-  setOrderSuccessData: (data: { orderId: string } | null) => void;
+  orderSuccessData: OrderSuccessData | null;
+  setOrderSuccessData: (data: OrderSuccessData | null) => void;
+
+  // Category selection
   selectedCategory: string | null;
   setSelectedCategory: (id: string | null) => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
   selectedSubcategory: string | null;
   setSelectedSubcategory: (id: string | null) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 
-  // Location
+  // User
+  user: User | null;
+  setUser: (user: User | null) => void;
+
+  // ── Location and min order (will NOT be persisted) ──
   userLocation: string | null;
+  setUserLocation: (location: string | null) => void;
   effectiveMinOrder: number;
-  setUserLocation: (address: string | null) => void;
   setEffectiveMinOrder: (minOrder: number) => void;
 }
-
-const DEFAULT_MIN_ORDER = 2500;
 
 export const useStore = create<StoreState>()(
   persist(
@@ -73,53 +73,42 @@ export const useStore = create<StoreState>()(
       language: 'en',
       setLanguage: (lang) => set({ language: lang }),
 
-      currentView: 'store',
-      setCurrentView: (view) => set({ currentView: view }),
-
-      user: null,
-      setUser: (user) => set({ user }),
-
       cart: [],
       addToCart: (item) => {
-        const cart = get().cart;
-        const existingIndex = cart.findIndex(
-          (c) => c.productId === item.productId && c.unit === item.unit
-        );
-        if (existingIndex >= 0) {
-          const updated = [...cart];
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            quantity: updated[existingIndex].quantity + item.quantity,
-            totalPrice: (updated[existingIndex].quantity + item.quantity) * item.pricePerUnit,
-          };
-          set({ cart: updated });
+        const existing = get().cart.find((i) => i.productId === item.productId && i.unit === item.unit);
+        if (existing) {
+          set({
+            cart: get().cart.map((i) =>
+              i.productId === item.productId && i.unit === item.unit
+                ? { ...i, quantity: i.quantity + item.quantity, totalPrice: (i.quantity + item.quantity) * i.pricePerUnit }
+                : i
+            ),
+          });
         } else {
-          set({ cart: [...cart, item] });
+          set({ cart: [...get().cart, item] });
         }
       },
       removeFromCart: (productId) => {
-        set({ cart: get().cart.filter((c) => c.productId !== productId) });
+        set({ cart: get().cart.filter((i) => i.productId !== productId) });
       },
       updateCartItem: (productId, updates) => {
         set({
-          cart: get().cart.map((c) =>
-            c.productId === productId
-              ? {
-                  ...c,
-                  ...updates,
-                  totalPrice: (updates.quantity ?? c.quantity) * (updates.pricePerUnit ?? c.pricePerUnit),
-                }
-              : c
+          cart: get().cart.map((i) =>
+            i.productId === productId ? { ...i, ...updates } : i
           ),
         });
       },
       clearCart: () => set({ cart: [] }),
-      getCartTotal: () => get().cart.reduce((sum, item) => sum + item.totalPrice, 0),
-      getCartCount: () => get().cart.reduce((sum, item) => sum + item.quantity, 0),
+      getCartTotal: () => {
+        return get().cart.reduce((sum, i) => sum + i.totalPrice, 0);
+      },
+      getCartCount: () => {
+        return get().cart.reduce((count, i) => count + i.quantity, 0);
+      },
       getMinOrderRemaining: () => {
-        const { cart, effectiveMinOrder } = get();
-        const total = cart.reduce((sum, item) => sum + item.totalPrice, 0);
-        return Math.max(0, effectiveMinOrder - total);
+        const total = get().getCartTotal();
+        const minOrder = get().effectiveMinOrder || 2500;
+        return Math.max(0, minOrder - total);
       },
 
       cartOpen: false,
@@ -128,28 +117,30 @@ export const useStore = create<StoreState>()(
       setCheckoutOpen: (open) => set({ checkoutOpen: open }),
       orderSuccessData: null,
       setOrderSuccessData: (data) => set({ orderSuccessData: data }),
+
       selectedCategory: null,
-      setSelectedCategory: (id) => set({ selectedCategory: id, selectedSubcategory: null }),
-      searchQuery: '',
-      setSearchQuery: (query) => set({ searchQuery: query }),
+      setSelectedCategory: (id) => set({ selectedCategory: id }),
       selectedSubcategory: null,
       setSelectedSubcategory: (id) => set({ selectedSubcategory: id }),
+      searchQuery: '',
+      setSearchQuery: (query) => set({ searchQuery: query }),
 
-      // Location
+      user: null,
+      setUser: (user) => set({ user }),
+
+      // Location – these will NOT be persisted
       userLocation: null,
-      effectiveMinOrder: DEFAULT_MIN_ORDER,
-      setUserLocation: (address) => set({ userLocation: address }),
+      setUserLocation: (location) => set({ userLocation: location }),
+      effectiveMinOrder: 2500,
       setEffectiveMinOrder: (minOrder) => set({ effectiveMinOrder: minOrder }),
     }),
     {
-      name: 'uk-mart-storage',
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        userLocation: state.userLocation,
-        effectiveMinOrder: state.effectiveMinOrder,
-        cart: state.cart,
-        // optionally persist language, selectedCategory etc.
-      }),
+      name: 'uk-mart-store',
+      // ✅ Exclude location-related fields from persistence
+      partialize: (state) => {
+        const { userLocation, effectiveMinOrder, ...rest } = state;
+        return rest;
+      },
     }
   )
 );
