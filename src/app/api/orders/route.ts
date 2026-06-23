@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 // ============================================================
-// GET – fetch all orders (with optional limit/offset)
+// GET – fetch all orders (with optional limit/offset & rating)
 // ============================================================
 export async function GET(req: NextRequest) {
   try {
@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
       include: {
         items: true,
         user: { select: { id: true, name: true, email: true, phone: true } },
+        rating: true, // ✅ include rating
       },
     });
 
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ============================================================
-// POST – create a new order
+// POST – create a new order (supports dynamic minOrder)
 // ============================================================
 export async function POST(req: NextRequest) {
   try {
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       pincode,
       notes,
       paymentMethod = 'UPI',
+      minOrder,          // <-- accept minOrder from frontend
     } = body;
 
     // Validation
@@ -70,9 +72,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (totalAmount < 2500) {
+    // Use provided minOrder or fallback to 2500
+    const MIN_ORDER = minOrder || 2500;
+
+    if (totalAmount < MIN_ORDER) {
       return NextResponse.json(
-        { error: 'Minimum order amount is ₹2,500' },
+        { error: `Minimum order amount is ₹${MIN_ORDER}` },
         { status: 400 }
       );
     }
@@ -106,7 +111,7 @@ export async function POST(req: NextRequest) {
           })),
         },
       },
-      include: { items: true },
+      include: { items: true, rating: true }, // include rating (will be null)
     });
 
     // Update stock for each product
@@ -143,7 +148,7 @@ export async function POST(req: NextRequest) {
 }
 
 // ============================================================
-// PUT – update order status and payment status
+// PUT – update order status and payment status (includes rating)
 // ============================================================
 export async function PUT(req: NextRequest) {
   try {
@@ -171,6 +176,7 @@ export async function PUT(req: NextRequest) {
     const order = await db.order.update({
       where: { id },
       data: updateData,
+      include: { rating: true }, // include rating
     });
 
     return NextResponse.json(order);
@@ -195,7 +201,6 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
-    // Optionally, instead of hard delete, you could soft-delete or cancel
     const order = await db.order.findUnique({ where: { id } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
