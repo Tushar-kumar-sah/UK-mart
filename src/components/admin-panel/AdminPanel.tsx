@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
@@ -69,6 +69,7 @@ import {
   TrendingUp,
   IndianRupee,
   LogOut,
+  Search,
 } from 'lucide-react';
 import {
   BarChart,
@@ -83,7 +84,7 @@ import {
 } from 'recharts';
 
 // ============================================================
-// Types (unchanged – all the interfaces)
+// Types (unchanged)
 // ============================================================
 
 interface DashboardData {
@@ -254,10 +255,7 @@ export default function AdminPanel() {
   const isAuthenticated = !!session?.user;
   const isAdmin = isAuthenticated && (session.user as any)?.role === 'ADMIN';
 
-  // ============================================================
-  // ALL HOOKS – MUST BE BEFORE ANY EARLY RETURN
-  // ============================================================
-
+  // ── Hooks ──
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -270,6 +268,9 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [aiResult, setAiResult] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+
+  // ── Product search filter ──
+  const [productSearchQuery, setProductSearchQuery] = useState('');
 
   const [loading, setLoading] = useState<Record<Section, boolean>>({
     dashboard: false,
@@ -294,9 +295,37 @@ export default function AdminPanel() {
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [editStockValue, setEditStockValue] = useState<number>(0);
 
-  // ============================================================
-  // API callbacks – with array safety and error toasts
-  // ============================================================
+  // ── Compute monthly revenue from orders ──
+  const monthlyRevenue = useMemo(() => {
+    if (!Array.isArray(orders) || orders.length === 0) return 0;
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return orders
+      .filter((order) => {
+        const date = new Date(order.createdAt);
+        return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+      })
+      .reduce((sum, order) => sum + order.finalAmount, 0);
+  }, [orders]);
+
+  // ── Filter products by search query ──
+  const filteredProducts = useMemo(() => {
+    if (!productSearchQuery.trim()) return products;
+    const q = productSearchQuery.toLowerCase().trim();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.nameHi.toLowerCase().includes(q) ||
+        p.nameBn.toLowerCase().includes(q) ||
+        (p.category?.name.toLowerCase().includes(q)) ||
+        (p.category?.nameHi.toLowerCase().includes(q)) ||
+        (p.category?.nameBn.toLowerCase().includes(q)) ||
+        p.description.toLowerCase().includes(q)
+    );
+  }, [products, productSearchQuery]);
+
+  // ── API callbacks ──
   const setLoadingFor = useCallback((section: Section, value: boolean) => {
     setLoading((prev) => ({ ...prev, [section]: value }));
   }, []);
@@ -463,12 +492,11 @@ export default function AdminPanel() {
 
   useEffect(() => {
     fetchDashboard();
-  }, [fetchDashboard]);
+    // Also load orders so monthly revenue is available on dashboard
+    fetchOrders();
+  }, [fetchDashboard, fetchOrders]);
 
-  // ============================================================
-  // EARLY RETURNS (after all hooks)
-  // ============================================================
-
+  // ── Early returns ──
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -580,9 +608,7 @@ export default function AdminPanel() {
     </div>
   );
 
-  // ============================================================
-  // RENDER: Dashboard (unchanged – already works)
-  // ============================================================
+  // ── RENDER: Dashboard ──
   const renderDashboard = () => {
     if (!dashboardData) {
       return (
@@ -600,22 +626,32 @@ export default function AdminPanel() {
         icon: <IndianRupee className="size-5 text-green-600" />,
       },
       {
+        title: 'Monthly Revenue',
+        value: formatCurrency(monthlyRevenue),
+        sub: `Orders this month: ${orders.filter((o) => {
+          const date = new Date(o.createdAt);
+          const now = new Date();
+          return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+        }).length}`,
+        icon: <TrendingUp className="size-5 text-blue-600" />,
+      },
+      {
         title: 'Total Orders',
         value: dashboardData.totalOrders.toString(),
         sub: `${dashboardData.pendingOrders} pending`,
-        icon: <ShoppingCart className="size-5 text-blue-600" />,
+        icon: <ShoppingCart className="size-5 text-purple-600" />,
       },
       {
         title: 'Total Products',
         value: dashboardData.totalProducts.toString(),
         sub: `${dashboardData.lowStock} low stock`,
-        icon: <Package className="size-5 text-purple-600" />,
+        icon: <Package className="size-5 text-orange-600" />,
       },
       {
         title: 'Total Users',
         value: dashboardData.totalUsers.toString(),
         sub: `${dashboardData.activeOffers} active offers`,
-        icon: <Users className="size-5 text-orange-600" />,
+        icon: <Users className="size-5 text-rose-600" />,
       },
     ];
 
@@ -626,13 +662,13 @@ export default function AdminPanel() {
             <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
             <p className="text-sm text-muted-foreground">Overview of your store performance</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading.dashboard}>
+          <Button variant="outline" size="sm" onClick={() => { fetchDashboard(); fetchOrders(); }} disabled={loading.dashboard}>
             <RefreshCw className={`size-4 mr-1 ${loading.dashboard ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {statCards.map((card) => (
             <Card key={card.title} className="border shadow-none">
               <CardContent className="p-4">
@@ -761,15 +797,13 @@ export default function AdminPanel() {
     );
   };
 
-  // ============================================================
-  // RENDER: Products (unchanged)
-  // ============================================================
+  // ── RENDER: Products (with search bar) ──
   const renderProducts = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-2xl font-bold">Products</h2>
-          <p className="text-sm text-muted-foreground">{products.length} products total</p>
+          <p className="text-sm text-muted-foreground">{filteredProducts.length} products found</p>
         </div>
         <Button
           onClick={() => {
@@ -780,6 +814,25 @@ export default function AdminPanel() {
           <Plus className="size-4 mr-1" />
           Add Product
         </Button>
+      </div>
+
+      {/* ── Search Bar ── */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Search products by name or category..."
+          value={productSearchQuery}
+          onChange={(e) => setProductSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+        {productSearchQuery && (
+          <button
+            onClick={() => setProductSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       <Card className="border shadow-none">
@@ -798,7 +851,7 @@ export default function AdminPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>
                       {product.imageUrl ? (
@@ -861,10 +914,10 @@ export default function AdminPanel() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {products.length === 0 && (
+                {filteredProducts.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No products found
+                      {productSearchQuery ? 'No products match your search' : 'No products found'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -884,9 +937,7 @@ export default function AdminPanel() {
     </div>
   );
 
-  // ============================================================
-  // RENDER: Categories (unchanged)
-  // ============================================================
+  // ── RENDER: Categories (unchanged) ──
   const renderCategories = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1073,11 +1124,8 @@ export default function AdminPanel() {
     </div>
   );
 
-  // ============================================================
-  // RENDER: Stock Management (now works)
-  // ============================================================
+  // ── RENDER: Stock Management ──
   const renderStock = () => {
-    // Ensure it's an array
     const items = Array.isArray(lowStockItems) ? lowStockItems : [];
     return (
       <div className="space-y-6">
@@ -1185,9 +1233,7 @@ export default function AdminPanel() {
     );
   };
 
-  // ============================================================
-  // RENDER: Offers Management (now works)
-  // ============================================================
+  // ── RENDER: Offers Management ──
   const renderOffers = () => {
     const items = Array.isArray(offers) ? offers : [];
     return (
@@ -1306,9 +1352,7 @@ export default function AdminPanel() {
     );
   };
 
-  // ============================================================
-  // RENDER: Orders (unchanged – already has array safety)
-  // ============================================================
+  // ── RENDER: Orders ──
   const renderOrders = () => {
     if (!Array.isArray(orders)) {
       return (
@@ -1521,9 +1565,7 @@ export default function AdminPanel() {
     );
   };
 
-  // ============================================================
-  // RENDER: Users (unchanged)
-  // ============================================================
+  // ── RENDER: Users ──
   const renderUsers = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1604,14 +1646,11 @@ export default function AdminPanel() {
     </div>
   );
 
-  // ============================================================
-  // RENDER: AI Analyzer (now works)
-  // ============================================================
+  // ── RENDER: AI Analyzer ──
   const runAIAnalysis = async (type: 'sales_trend' | 'inventory' | 'customer_behavior') => {
     setAiLoading(true);
     setAiResult(null);
     try {
-      // Prepare data based on type
       let dataToSend: unknown;
       if (type === 'sales_trend') {
         dataToSend = {
@@ -1818,9 +1857,7 @@ export default function AdminPanel() {
     </div>
   );
 
-  // ============================================================
-  // Section Renderer
-  // ============================================================
+  // ── Section Renderer ──
   const renderSection = () => {
     switch (activeSection) {
       case 'dashboard': return renderDashboard();
@@ -1835,9 +1872,7 @@ export default function AdminPanel() {
     }
   };
 
-  // ============================================================
-  // Main Layout
-  // ============================================================
+  // ── Main Layout ──
   return (
     <div className="min-h-screen flex bg-white">
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 border-r bg-white">
@@ -1927,7 +1962,6 @@ function ProductDialog({
 
   const isEditing = !!product;
 
-  // Get child subcategories for selected parent category
   const parentCat = categories.find((c) => c.id === form.categoryId);
   const childSubcategories = parentCat?.children || [];
 
