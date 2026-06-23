@@ -260,18 +260,6 @@ export default function StoreFront() {
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
-  // ── Clear location on page unload (so user must re‑set each visit) ──
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      setUserLocation(null);
-      setEffectiveMinOrder(DEFAULT_MIN_ORDER);
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [setUserLocation, setEffectiveMinOrder]);
-
   // ── Sync session ──
   useEffect(() => {
     if (session?.user) {
@@ -840,7 +828,7 @@ export default function StoreFront() {
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
-            {/* Logo */}
+            {/* Logo - larger and clearer */}
             <div
               className="flex items-center gap-2 shrink-0 cursor-pointer"
               onClick={() => {
@@ -850,13 +838,14 @@ export default function StoreFront() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
-              <div className="relative h-9 w-9 sm:h-12 sm:w-12 shrink-0">
+              <div className="relative h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                 <Image
                   src="/logo.png"
                   alt="UK MART"
                   fill
                   className="object-contain"
                   priority
+                  unoptimized // ensures the original file is served for clarity
                 />
               </div>
               <span className="text-base sm:text-xl font-bold text-[#8D6E63] hidden sm:block">
@@ -1025,8 +1014,8 @@ export default function StoreFront() {
           </SheetHeader>
           <div className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="relative h-10 w-10">
-                <Image src="/logo.png" alt="UK MART" fill className="object-contain" />
+              <div className="relative h-14 w-14 shrink-0">
+                <Image src="/logo.png" alt="UK MART" fill className="object-contain" unoptimized />
               </div>
               <span className="text-lg font-bold text-[#8D6E63]">{t('storeName', language)}</span>
             </div>
@@ -1662,8 +1651,8 @@ export default function StoreFront() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="relative h-8 w-8">
-                  <Image src="/logo.png" alt="UK MART" fill className="object-contain" />
+                <div className="relative h-12 w-12 shrink-0">
+                  <Image src="/logo.png" alt="UK MART" fill className="object-contain" unoptimized />
                 </div>
                 <span className="text-lg font-bold text-white">{t('storeName', language)}</span>
               </div>
