@@ -313,7 +313,6 @@ export default function StoreFront() {
   const [deliveryForm, setDeliveryForm] = useState({
     name: '', phone: '', address: '', pincode: '', notes: '',
   });
-  // ── NEW: validation errors state ──
   const [deliveryErrors, setDeliveryErrors] = useState({
     name: '',
     phone: '',
@@ -349,7 +348,11 @@ export default function StoreFront() {
   const [addedProducts, setAddedProducts] = useState<Record<string, boolean>>({});
   const [customWeights, setCustomWeights] = useState<Record<string, string>>({});
 
-  // ── NEW: validation helper functions ──
+  // ── Validation helpers ──
+  const validateName = (name: string): boolean => {
+    return /^[A-Za-z\s]{2,}$/.test(name.trim()); // at least 2 letters, spaces allowed
+  };
+
   const validatePhone = (phone: string): boolean => {
     const cleaned = phone.replace(/\s/g, '');
     // Allow +91 or 0 prefix, then 10 digits
@@ -367,6 +370,9 @@ export default function StoreFront() {
 
     if (!deliveryForm.name.trim()) {
       errors.name = 'Name is required';
+      valid = false;
+    } else if (!validateName(deliveryForm.name)) {
+      errors.name = 'Enter a valid name (letters only, at least 2 characters)';
       valid = false;
     }
 
@@ -398,7 +404,13 @@ export default function StoreFront() {
   const handleDeliveryFieldBlur = (field: keyof typeof deliveryForm) => {
     const errors = { ...deliveryErrors };
     if (field === 'name') {
-      errors.name = deliveryForm.name.trim() ? '' : 'Name is required';
+      if (!deliveryForm.name.trim()) {
+        errors.name = 'Name is required';
+      } else if (!validateName(deliveryForm.name)) {
+        errors.name = 'Enter a valid name (letters only, at least 2 characters)';
+      } else {
+        errors.name = '';
+      }
     } else if (field === 'phone') {
       if (!deliveryForm.phone.trim()) {
         errors.phone = 'Phone number is required';
@@ -723,7 +735,7 @@ export default function StoreFront() {
       pincode: deliveryForm.pincode,
       notes: deliveryForm.notes,
       paymentMethod: selectedPaymentMethod,
-      minOrder: effectiveMinOrder, // ✅ send minOrder for backend validation
+      minOrder: effectiveMinOrder,
     };
 
     // ── COD flow ──
@@ -2171,6 +2183,7 @@ export default function StoreFront() {
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={() => {
                   if (checkoutStep === 1) {
+                    // Validate the form – if invalid, show errors and stay on step 1
                     if (!validateDeliveryForm()) {
                       toast.error('Please fix the errors in the form');
                       return;
@@ -2180,15 +2193,6 @@ export default function StoreFront() {
                     setCheckoutStep(3);
                   }
                 }}
-                disabled={
-                  checkoutStep === 1 &&
-                  (!deliveryForm.name.trim() ||
-                   !deliveryForm.phone.trim() ||
-                   !deliveryForm.address.trim() ||
-                   !deliveryForm.pincode.trim() ||
-                   !validatePhone(deliveryForm.phone) ||
-                   !validatePincode(deliveryForm.pincode))
-                }
               >
                 Continue <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
