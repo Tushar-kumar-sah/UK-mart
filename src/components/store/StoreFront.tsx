@@ -313,6 +313,13 @@ export default function StoreFront() {
   const [deliveryForm, setDeliveryForm] = useState({
     name: '', phone: '', address: '', pincode: '', notes: '',
   });
+  // ── NEW: validation errors state ──
+  const [deliveryErrors, setDeliveryErrors] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    pincode: '',
+  });
   const [razorpayLoading, setRazorpayLoading] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('RAZORPAY');
 
@@ -341,6 +348,78 @@ export default function StoreFront() {
   const [selectedQtys, setSelectedQtys] = useState<Record<string, number>>({});
   const [addedProducts, setAddedProducts] = useState<Record<string, boolean>>({});
   const [customWeights, setCustomWeights] = useState<Record<string, string>>({});
+
+  // ── NEW: validation helper functions ──
+  const validatePhone = (phone: string): boolean => {
+    const cleaned = phone.replace(/\s/g, '');
+    // Allow +91 or 0 prefix, then 10 digits
+    const regex = /^(?:\+91|0)?[6-9]\d{9}$/;
+    return regex.test(cleaned);
+  };
+
+  const validatePincode = (pincode: string): boolean => {
+    return /^\d{6}$/.test(pincode);
+  };
+
+  const validateDeliveryForm = (): boolean => {
+    const errors = { name: '', phone: '', address: '', pincode: '' };
+    let valid = true;
+
+    if (!deliveryForm.name.trim()) {
+      errors.name = 'Name is required';
+      valid = false;
+    }
+
+    if (!deliveryForm.phone.trim()) {
+      errors.phone = 'Phone number is required';
+      valid = false;
+    } else if (!validatePhone(deliveryForm.phone)) {
+      errors.phone = 'Enter a valid 10-digit Indian phone number';
+      valid = false;
+    }
+
+    if (!deliveryForm.address.trim()) {
+      errors.address = 'Address is required';
+      valid = false;
+    }
+
+    if (!deliveryForm.pincode.trim()) {
+      errors.pincode = 'Pincode is required';
+      valid = false;
+    } else if (!validatePincode(deliveryForm.pincode)) {
+      errors.pincode = 'Pincode must be 6 digits';
+      valid = false;
+    }
+
+    setDeliveryErrors(errors);
+    return valid;
+  };
+
+  const handleDeliveryFieldBlur = (field: keyof typeof deliveryForm) => {
+    const errors = { ...deliveryErrors };
+    if (field === 'name') {
+      errors.name = deliveryForm.name.trim() ? '' : 'Name is required';
+    } else if (field === 'phone') {
+      if (!deliveryForm.phone.trim()) {
+        errors.phone = 'Phone number is required';
+      } else if (!validatePhone(deliveryForm.phone)) {
+        errors.phone = 'Enter a valid 10-digit Indian phone number';
+      } else {
+        errors.phone = '';
+      }
+    } else if (field === 'address') {
+      errors.address = deliveryForm.address.trim() ? '' : 'Address is required';
+    } else if (field === 'pincode') {
+      if (!deliveryForm.pincode.trim()) {
+        errors.pincode = 'Pincode is required';
+      } else if (!validatePincode(deliveryForm.pincode)) {
+        errors.pincode = 'Pincode must be 6 digits';
+      } else {
+        errors.pincode = '';
+      }
+    }
+    setDeliveryErrors(errors);
+  };
 
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
@@ -1916,11 +1995,31 @@ export default function StoreFront() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name *</Label>
-                    <Input id="name" placeholder="Your full name" value={deliveryForm.name} onChange={(e) => setDeliveryForm((f) => ({ ...f, name: e.target.value }))} />
+                    <Input
+                      id="name"
+                      placeholder="Your full name"
+                      value={deliveryForm.name}
+                      onChange={(e) => setDeliveryForm((f) => ({ ...f, name: e.target.value }))}
+                      onBlur={() => handleDeliveryFieldBlur('name')}
+                      className={deliveryErrors.name ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                    />
+                    {deliveryErrors.name && (
+                      <p className="text-xs text-red-500">{deliveryErrors.name}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone *</Label>
-                    <Input id="phone" placeholder="Phone number" value={deliveryForm.phone} onChange={(e) => setDeliveryForm((f) => ({ ...f, phone: e.target.value }))} />
+                    <Input
+                      id="phone"
+                      placeholder="Phone number"
+                      value={deliveryForm.phone}
+                      onChange={(e) => setDeliveryForm((f) => ({ ...f, phone: e.target.value }))}
+                      onBlur={() => handleDeliveryFieldBlur('phone')}
+                      className={deliveryErrors.phone ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                    />
+                    {deliveryErrors.phone && (
+                      <p className="text-xs text-red-500">{deliveryErrors.phone}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -1930,18 +2029,39 @@ export default function StoreFront() {
                     placeholder="Your delivery address"
                     value={deliveryForm.address}
                     onChange={(e) => setDeliveryForm((f) => ({ ...f, address: e.target.value }))}
+                    onBlur={() => handleDeliveryFieldBlur('address')}
                     rows={3}
+                    className={deliveryErrors.address ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   />
+                  {deliveryErrors.address && (
+                    <p className="text-xs text-red-500">{deliveryErrors.address}</p>
+                  )}
                 </div>
                 <div className="w-full sm:w-1/2">
                   <div className="space-y-2">
-                    <Label htmlFor="pincode">Pincode</Label>
-                    <Input id="pincode" placeholder="Pincode" value={deliveryForm.pincode} onChange={(e) => setDeliveryForm((f) => ({ ...f, pincode: e.target.value }))} />
+                    <Label htmlFor="pincode">Pincode *</Label>
+                    <Input
+                      id="pincode"
+                      placeholder="Pincode"
+                      value={deliveryForm.pincode}
+                      onChange={(e) => setDeliveryForm((f) => ({ ...f, pincode: e.target.value }))}
+                      onBlur={() => handleDeliveryFieldBlur('pincode')}
+                      className={deliveryErrors.pincode ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                    />
+                    {deliveryErrors.pincode && (
+                      <p className="text-xs text-red-500">{deliveryErrors.pincode}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Order Notes</Label>
-                  <Textarea id="notes" placeholder="Any special instructions" value={deliveryForm.notes} onChange={(e) => setDeliveryForm((f) => ({ ...f, notes: e.target.value }))} rows={2} />
+                  <Textarea
+                    id="notes"
+                    placeholder="Any special instructions"
+                    value={deliveryForm.notes}
+                    onChange={(e) => setDeliveryForm((f) => ({ ...f, notes: e.target.value }))}
+                    rows={2}
+                  />
                 </div>
                 {userLocation && (
                   <div className="text-xs text-gray-500 flex items-center gap-2">
@@ -2051,8 +2171,8 @@ export default function StoreFront() {
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={() => {
                   if (checkoutStep === 1) {
-                    if (!deliveryForm.name || !deliveryForm.phone || !deliveryForm.address) {
-                      toast.error('Please fill all delivery details');
+                    if (!validateDeliveryForm()) {
+                      toast.error('Please fix the errors in the form');
                       return;
                     }
                     setCheckoutStep(2);
@@ -2060,7 +2180,15 @@ export default function StoreFront() {
                     setCheckoutStep(3);
                   }
                 }}
-                disabled={checkoutStep === 1 && (!deliveryForm.name || !deliveryForm.phone || !deliveryForm.address)}
+                disabled={
+                  checkoutStep === 1 &&
+                  (!deliveryForm.name.trim() ||
+                   !deliveryForm.phone.trim() ||
+                   !deliveryForm.address.trim() ||
+                   !deliveryForm.pincode.trim() ||
+                   !validatePhone(deliveryForm.phone) ||
+                   !validatePincode(deliveryForm.pincode))
+                }
               >
                 Continue <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
