@@ -274,6 +274,13 @@ export default function StoreFront() {
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
+  // ── Mounted state for hydration fix ──
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // ── Product Detail Modal State ──
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [productDetailOpen, setProductDetailOpen] = useState(false);
@@ -281,7 +288,6 @@ export default function StoreFront() {
   const [modalSelectedQty, setModalSelectedQty] = useState<number>(1);
   const [modalCustomWeight, setModalCustomWeight] = useState<string>('');
 
-  // State for product ID from URL (set by wrapper)
   const [urlProductId, setUrlProductId] = useState<string | null>(null);
 
   // ── Sync session ──
@@ -719,7 +725,7 @@ export default function StoreFront() {
     );
   }, [setUserLocation, setEffectiveMinOrder]);
 
-  // ── Add to cart (updated to accept unit and qty) ──
+  // ── Add to cart ──
   const handleAddToCart = (product: Product, unit: string, qty: number) => {
     let finalUnit = unit;
     if (unit === 'custom') {
@@ -940,7 +946,7 @@ export default function StoreFront() {
     }, 50);
   };
 
-  // ── Render product grid with new props ──
+  // ── Render product grid ──
   const renderProductGrid = (items: Product[]) => (
     <motion.div
       className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4"
@@ -983,7 +989,6 @@ export default function StoreFront() {
   // ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-white overflow-x-hidden w-full">
-      {/* ── Suspense boundary for URL handler ── */}
       <Suspense fallback={null}>
         <ProductUrlHandler onProductId={setUrlProductId} />
       </Suspense>
@@ -992,7 +997,6 @@ export default function StoreFront() {
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
-            {/* Logo */}
             <div
               className="flex items-center gap-2 shrink-0 cursor-pointer"
               onClick={() => {
@@ -1003,21 +1007,13 @@ export default function StoreFront() {
               }}
             >
               <div className="relative h-12 w-12 sm:h-16 sm:w-16 shrink-0">
-                <Image
-                  src="/logo.png"
-                  alt="UK MART"
-                  fill
-                  className="object-contain"
-                  priority
-                  unoptimized
-                />
+                <Image src="/logo.png" alt="UK MART" fill className="object-contain" priority unoptimized />
               </div>
               <span className="text-base sm:text-xl font-bold text-[#8D6E63] hidden sm:block">
                 {t('storeName', language)}
               </span>
             </div>
 
-            {/* Desktop Search */}
             <div className="hidden md:flex flex-1 max-w-lg mx-4">
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1035,9 +1031,7 @@ export default function StoreFront() {
               </div>
             </div>
 
-            {/* Right Actions */}
             <div className="flex items-center gap-1 sm:gap-3 shrink-0">
-              {/* Language Switcher */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="hidden sm:flex gap-1 text-gray-600 hover:text-gray-900">
@@ -1062,7 +1056,6 @@ export default function StoreFront() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Location Button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1071,12 +1064,11 @@ export default function StoreFront() {
                 aria-label="Set delivery location"
               >
                 <MapPinIcon className="w-5 h-5" />
-                {userLocation && (
+                {isMounted && userLocation && (
                   <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border border-white" />
                 )}
               </Button>
 
-              {/* Cart Button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1084,14 +1076,13 @@ export default function StoreFront() {
                 onClick={() => setCartOpen(true)}
               >
                 <ShoppingCart className="w-5 h-5" />
-                {cartCount > 0 && (
+                {isMounted && cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#8D6E63] text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
                     {cartCount > 99 ? '99+' : cartCount}
                   </span>
                 )}
               </Button>
 
-              {/* User Dropdown */}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1143,7 +1134,6 @@ export default function StoreFront() {
                 </Button>
               )}
 
-              {/* Mobile Hamburger */}
               <Button variant="ghost" size="icon" className="md:hidden text-gray-600 h-9 w-9" onClick={() => setMobileMenuOpen(true)}>
                 <Menu className="w-5 h-5" />
               </Button>
@@ -1151,7 +1141,6 @@ export default function StoreFront() {
           </div>
         </div>
 
-        {/* Mobile Search */}
         <div className="md:hidden px-3 pb-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1306,7 +1295,7 @@ export default function StoreFront() {
               Detect my location
             </Button>
 
-            {userLocation && (
+            {isMounted && userLocation && (
               <div className="flex items-center justify-between text-sm text-gray-500 border-t pt-3 mt-2">
                 <span className="truncate">📍 {userLocation}</span>
                 <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => {
@@ -1356,7 +1345,6 @@ export default function StoreFront() {
             <DialogDescription>Your account details and order history</DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
-            {/* User Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
               <div>
                 <Label className="text-xs text-gray-500">Full Name</Label>
@@ -1372,7 +1360,6 @@ export default function StoreFront() {
               </div>
             </div>
 
-            {/* Order History */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Order History</h3>
               {ordersLoading ? (
@@ -1585,7 +1572,7 @@ export default function StoreFront() {
                     })
                 }
               </p>
-              {userLocation && deliveryDistance !== null && (
+              {isMounted && userLocation && deliveryDistance !== null && (
                 <p
                   className="text-sm xs:text-base sm:text-lg text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm bg-black/30 backdrop-blur-sm rounded-full px-4 py-1.5 inline-block"
                   style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
@@ -1699,7 +1686,7 @@ export default function StoreFront() {
         </section>
 
         {/* Min Order Reminder */}
-        {cartCount > 0 && minOrderRemaining > 0 && (
+        {isMounted && cartCount > 0 && minOrderRemaining > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1752,7 +1739,6 @@ export default function StoreFront() {
             </div>
           )}
 
-          {/* Browse-all view */}
           {!loading && !error && isBrowseAllView && (
             <div className="space-y-10 sm:space-y-12">
               {productsByCategory.map(({ category, items }) => (
@@ -1782,7 +1768,6 @@ export default function StoreFront() {
             </div>
           )}
 
-          {/* Filtered view */}
           {!loading && !error && !isBrowseAllView && (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -1890,7 +1875,7 @@ export default function StoreFront() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <SheetTitle className="text-lg font-bold text-gray-900">{t('yourCart', language)}</SheetTitle>
-                {cartCount > 0 && (
+                {isMounted && cartCount > 0 && (
                   <Badge className="bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/10">{cartCount}</Badge>
                 )}
               </div>
@@ -1946,7 +1931,7 @@ export default function StoreFront() {
                   </div>
                 )}
 
-                {userLocation && minOrderRemaining > 0 && (
+                {isMounted && userLocation && minOrderRemaining > 0 && (
                   <div className="bg-[#FFB300]/10 border border-[#FFB300]/30 rounded-lg p-2.5">
                     <p className="text-xs text-[#8D6E63] text-center">
                       ⚠️ {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
@@ -1982,7 +1967,7 @@ export default function StoreFront() {
                     <span>{t('total', language)}</span>
                     <span>{formatPrice(grandTotal)}</span>
                   </div>
-                  {userLocation && (
+                  {isMounted && userLocation && (
                     <div className="text-[11px] text-gray-500 flex items-center justify-between">
                       <span>📍 Location</span>
                       <span className="font-medium truncate ml-2">{userLocation}</span>
@@ -2147,7 +2132,7 @@ export default function StoreFront() {
                     rows={2}
                   />
                 </div>
-                {userLocation && (
+                {isMounted && userLocation && (
                   <div className="text-xs text-gray-500 flex items-center gap-2">
                     <MapPinIcon className="w-3 h-3" />
                     <span>Location set: {userLocation} – min order ₹{effectiveMinOrder}</span>
@@ -2192,7 +2177,7 @@ export default function StoreFront() {
                     <p className="text-gray-500">{deliveryForm.address}</p>
                     {deliveryForm.pincode && <p className="text-gray-500">Pincode: {deliveryForm.pincode}</p>}
                     {deliveryForm.notes && <p className="text-gray-400 italic">{deliveryForm.notes}</p>}
-                    {userLocation && (
+                    {isMounted && userLocation && (
                       <p className="text-xs text-gray-500">📍 {userLocation}</p>
                     )}
                   </div>
@@ -2304,7 +2289,9 @@ export default function StoreFront() {
 
       {/* ============ PRODUCT DETAIL MODAL ============ */}
       <Dialog open={productDetailOpen} onOpenChange={(open) => { if (!open) closeProductDetail(); }}>
-        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent 
+          className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden"
+        >
           {selectedProductId && (
             <ProductDetailModalContent
               productId={selectedProductId}
@@ -2428,7 +2415,6 @@ function ProductCard({
               {t('inStock', language)}
             </Badge>
           )}
-          {/* Share Button */}
           <button
             onClick={onShareClick}
             className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-colors"
@@ -2697,16 +2683,15 @@ function ProductDetailModalContent({
   const inStock = product.stock > 0;
 
   return (
-    <div className="p-4 sm:p-6">
+    <div className="p-4 sm:p-6 relative">
       <button
         onClick={closeModal}
-        className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+        className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 transition-colors z-10"
       >
         <X className="w-5 h-5 text-gray-500" />
       </button>
 
       <div className="flex flex-col md:flex-row gap-6">
-        {/* Image */}
         <div className={`w-full md:w-1/2 aspect-square ${pastelColor} rounded-xl overflow-hidden flex items-center justify-center`}>
           {product.imageUrl ? (
             <img src={product.imageUrl} alt={displayName} className="w-full h-full object-cover" />
@@ -2715,14 +2700,13 @@ function ProductDetailModalContent({
           )}
         </div>
 
-        {/* Details */}
         <div className="flex-1 space-y-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{displayName}</h2>
             <p className="text-sm text-gray-500 mt-1">{displayDescription}</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant={inStock ? 'default' : 'destructive'} className="text-xs">
               {inStock ? t('inStock', language) : t('outOfStock', language)}
             </Badge>
@@ -2731,7 +2715,6 @@ function ProductDetailModalContent({
             </span>
           </div>
 
-          {/* Unit Selection */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Select Unit</Label>
             {isSingleFixedItem ? (
@@ -2808,7 +2791,7 @@ function ProductDetailModalContent({
             )}
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
               <button
                 onClick={() => setSelectedQty(Math.max(1, selectedQty - 1))}
