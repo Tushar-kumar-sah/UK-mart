@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ShoppingCart, X, Minus, Plus, Trash2, ChevronRight, ChevronDown,
@@ -240,6 +240,18 @@ function getCustomInputLabel(unitType: string): string {
   }
 }
 
+// ─── Wrapper Component for useSearchParams ────────────
+function ProductUrlHandler({ onProductId }: { onProductId: (id: string | null) => void }) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const productId = searchParams?.get('product');
+    onProductId(productId || null);
+  }, [searchParams, onProductId]);
+
+  return null;
+}
+
 // ─── Main Component ──────────────────────────────────────
 export default function StoreFront() {
   const {
@@ -259,7 +271,6 @@ export default function StoreFront() {
   } = useStore();
 
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
 
@@ -269,6 +280,9 @@ export default function StoreFront() {
   const [modalSelectedUnit, setModalSelectedUnit] = useState<string>('');
   const [modalSelectedQty, setModalSelectedQty] = useState<number>(1);
   const [modalCustomWeight, setModalCustomWeight] = useState<string>('');
+
+  // State for product ID from URL (set by wrapper)
+  const [urlProductId, setUrlProductId] = useState<string | null>(null);
 
   // ── Sync session ──
   useEffect(() => {
@@ -285,14 +299,13 @@ export default function StoreFront() {
     }
   }, [session, setUser]);
 
-  // ── Auto-open product detail from URL ──
+  // ── Open modal when URL product ID changes ──
   useEffect(() => {
-    const productId = searchParams?.get('product');
-    if (productId) {
-      setSelectedProductId(productId);
+    if (urlProductId) {
+      setSelectedProductId(urlProductId);
       setProductDetailOpen(true);
     }
-  }, [searchParams]);
+  }, [urlProductId]);
 
   // ── Open product detail ──
   const openProductDetail = useCallback((productId: string) => {
@@ -970,6 +983,11 @@ export default function StoreFront() {
   // ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-white overflow-x-hidden w-full">
+      {/* ── Suspense boundary for URL handler ── */}
+      <Suspense fallback={null}>
+        <ProductUrlHandler onProductId={setUrlProductId} />
+      </Suspense>
+
       {/* ============ HEADER ============ */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
