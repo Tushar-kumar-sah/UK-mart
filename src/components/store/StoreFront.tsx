@@ -6,7 +6,7 @@ import {
   Search, ShoppingCart, X, Minus, Plus, Trash2, ChevronRight, ChevronDown,
   ShoppingBag, Globe, LogOut, User, Package, MapPin, Phone,
   CreditCard, CheckCircle2, Menu, ArrowRight, Loader2, AlertCircle,
-  MapPin as MapPinIcon, Star, Calendar, Clock,
+  MapPin as MapPinIcon, Star, Calendar, Clock, Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,7 @@ import { t, type Language } from '@/lib/i18n';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 // ─── Helpers ────────────────────────────────────────────
 function shuffleArray<T>(array: T[]): T[] {
@@ -257,8 +258,17 @@ export default function StoreFront() {
     setEffectiveMinOrder,
   } = useStore();
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const isAuthenticated = !!session?.user;
+
+  // ── Product Detail Modal State ──
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [productDetailOpen, setProductDetailOpen] = useState(false);
+  const [modalSelectedUnit, setModalSelectedUnit] = useState<string>('');
+  const [modalSelectedQty, setModalSelectedQty] = useState<number>(1);
+  const [modalCustomWeight, setModalCustomWeight] = useState<string>('');
 
   // ── Sync session ──
   useEffect(() => {
@@ -274,6 +284,47 @@ export default function StoreFront() {
       setUser(null);
     }
   }, [session, setUser]);
+
+  // ── Auto-open product detail from URL ──
+  useEffect(() => {
+    const productId = searchParams?.get('product');
+    if (productId) {
+      setSelectedProductId(productId);
+      setProductDetailOpen(true);
+    }
+  }, [searchParams]);
+
+  // ── Open product detail ──
+  const openProductDetail = useCallback((productId: string) => {
+    setSelectedProductId(productId);
+    setProductDetailOpen(true);
+    router.push(`?product=${productId}`, { scroll: false });
+  }, [router]);
+
+  // ── Close product detail ──
+  const closeProductDetail = useCallback(() => {
+    setProductDetailOpen(false);
+    setSelectedProductId(null);
+    router.push(window.location.pathname, { scroll: false });
+  }, [router]);
+
+  // ── Share product ──
+  const shareProduct = useCallback((productId: string) => {
+    const url = `${window.location.origin}${window.location.pathname}?product=${productId}`;
+    if (navigator.share) {
+      navigator.share({
+        title: 'Check out this product',
+        text: 'Check out this product on UK MART',
+        url: url,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        toast.success('Link copied to clipboard!');
+      }).catch(() => {
+        toast.error('Failed to copy link');
+      });
+    }
+  }, []);
 
   // ── Razorpay script loader ──
   const [razorpayScriptLoaded, setRazorpayScriptLoaded] = useState(false);
@@ -350,12 +401,11 @@ export default function StoreFront() {
 
   // ── Validation helpers ──
   const validateName = (name: string): boolean => {
-    return /^[A-Za-z\s]{2,}$/.test(name.trim()); // at least 2 letters, spaces allowed
+    return /^[A-Za-z\s]{2,}$/.test(name.trim());
   };
 
   const validatePhone = (phone: string): boolean => {
     const cleaned = phone.replace(/\s/g, '');
-    // Allow +91 or 0 prefix, then 10 digits
     const regex = /^(?:\+91|0)?[6-9]\d{9}$/;
     return regex.test(cleaned);
   };
@@ -613,7 +663,6 @@ export default function StoreFront() {
       async (position) => {
         const { latitude, longitude } = position.coords;
         try {
-          // Reverse geocode to get address
           const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
           const geoRes = await fetch(geoUrl);
           const geoData = await geoRes.json();
@@ -622,7 +671,6 @@ export default function StoreFront() {
             address = geoData.results[0].formatted_address;
           }
 
-          // Calculate distance and min order
           const distRes = await fetch('/api/distance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -658,22 +706,21 @@ export default function StoreFront() {
     );
   }, [setUserLocation, setEffectiveMinOrder]);
 
-  // ── Add to cart ──
-  const handleAddToCart = (product: Product) => {
-    let unit = selectedUnits[product.id] || product.baseUnit;
-    const qty = selectedQtys[product.id] || 1;
+  // ── Add to cart (updated to accept unit and qty) ──
+  const handleAddToCart = (product: Product, unit: string, qty: number) => {
+    let finalUnit = unit;
     if (unit === 'custom') {
-      const raw = customWeights[product.id];
+      const raw = customWeights[product.id] || '';
       if (!raw || parseFloat(raw) <= 0) return;
-      unit = formatCustomWeight(raw, product.unitType);
+      finalUnit = formatCustomWeight(raw, product.unitType);
     }
-    const price = calculatePrice(product.basePrice, product.baseUnit, unit);
+    const price = calculatePrice(product.basePrice, product.baseUnit, finalUnit);
     addToCart({
       productId: product.id,
       productName: getLocalName(product, language),
       productImage: product.imageUrl,
       quantity: qty,
-      unit,
+      unit: finalUnit,
       pricePerUnit: price,
       totalPrice: price * qty,
     });
@@ -738,7 +785,6 @@ export default function StoreFront() {
       minOrder: effectiveMinOrder,
     };
 
-    // ── COD flow ──
     if (selectedPaymentMethod === 'COD') {
       setRazorpayLoading(true);
       try {
@@ -771,7 +817,6 @@ export default function StoreFront() {
       return;
     }
 
-    // ── Razorpay flow ──
     if (!razorpayScriptLoaded) {
       toast.error('Payment gateway is loading, please try again');
       return;
@@ -882,6 +927,7 @@ export default function StoreFront() {
     }, 50);
   };
 
+  // ── Render product grid with new props ──
   const renderProductGrid = (items: Product[]) => (
     <motion.div
       className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4"
@@ -904,7 +950,16 @@ export default function StoreFront() {
           onUnitChange={(unit) => setSelectedUnits((prev) => ({ ...prev, [product.id]: unit }))}
           onQtyChange={(qty) => setSelectedQtys((prev) => ({ ...prev, [product.id]: qty }))}
           onCustomWeightChange={(val) => setCustomWeights((prev) => ({ ...prev, [product.id]: val }))}
-          onAddToCart={() => handleAddToCart(product)}
+          onAddToCart={() => {
+            let unit = selectedUnits[product.id] || product.baseUnit;
+            let qty = selectedQtys[product.id] || 1;
+            handleAddToCart(product, unit, qty);
+          }}
+          onCardClick={() => openProductDetail(product.id)}
+          onShareClick={(e) => {
+            e.stopPropagation();
+            shareProduct(product.id);
+          }}
         />
       ))}
     </motion.div>
@@ -919,7 +974,7 @@ export default function StoreFront() {
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
-            {/* Logo - larger and clearer */}
+            {/* Logo */}
             <div
               className="flex items-center gap-2 shrink-0 cursor-pointer"
               onClick={() => {
@@ -936,7 +991,7 @@ export default function StoreFront() {
                   fill
                   className="object-contain"
                   priority
-                  unoptimized // ensures the original file is served for clarity
+                  unoptimized
                 />
               </div>
               <span className="text-base sm:text-xl font-bold text-[#8D6E63] hidden sm:block">
@@ -1198,7 +1253,7 @@ export default function StoreFront() {
         </SheetContent>
       </Sheet>
 
-      {/* ============ LOCATION DIALOG (only "Detect my location") ============ */}
+      {/* ============ LOCATION DIALOG ============ */}
       <Dialog
         open={locationDialogOpen}
         onOpenChange={(open) => {
@@ -1223,7 +1278,6 @@ export default function StoreFront() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {/* Only "Detect my location" button */}
             <Button
               variant="default"
               className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90"
@@ -2183,7 +2237,6 @@ export default function StoreFront() {
                 className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
                 onClick={() => {
                   if (checkoutStep === 1) {
-                    // Validate the form – if invalid, show errors and stay on step 1
                     if (!validateDeliveryForm()) {
                       toast.error('Please fix the errors in the form');
                       return;
@@ -2230,6 +2283,34 @@ export default function StoreFront() {
           </motion.div>
         </DialogContent>
       </Dialog>
+
+      {/* ============ PRODUCT DETAIL MODAL ============ */}
+      <Dialog open={productDetailOpen} onOpenChange={(open) => { if (!open) closeProductDetail(); }}>
+        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0">
+          {selectedProductId && (
+            <ProductDetailModalContent
+              productId={selectedProductId}
+              products={products}
+              language={language}
+              selectedUnit={modalSelectedUnit}
+              setSelectedUnit={setModalSelectedUnit}
+              selectedQty={modalSelectedQty}
+              setSelectedQty={setModalSelectedQty}
+              customWeight={modalCustomWeight}
+              setCustomWeight={setModalCustomWeight}
+              onAddToCart={(unit, qty) => {
+                const product = products.find(p => p.id === selectedProductId);
+                if (product) {
+                  handleAddToCart(product, unit, qty);
+                }
+              }}
+              onShare={() => shareProduct(selectedProductId)}
+              closeModal={closeProductDetail}
+              isAdded={!!addedProducts[selectedProductId]}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2246,9 +2327,24 @@ interface ProductCardProps {
   onQtyChange: (qty: number) => void;
   onCustomWeightChange: (val: string) => void;
   onAddToCart: () => void;
+  onCardClick: () => void;
+  onShareClick: (e: React.MouseEvent) => void;
 }
 
-function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, customWeight, onUnitChange, onQtyChange, onCustomWeightChange, onAddToCart }: ProductCardProps) {
+function ProductCard({
+  product,
+  language,
+  selectedUnit,
+  selectedQty,
+  isAdded,
+  customWeight,
+  onUnitChange,
+  onQtyChange,
+  onCustomWeightChange,
+  onAddToCart,
+  onCardClick,
+  onShareClick,
+}: ProductCardProps) {
   const rawAvailableUnits: string[] = (() => {
     try {
       const parsed = JSON.parse(product.availableUnits);
@@ -2289,7 +2385,10 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
       transition={{ duration: 0.3 }}
       className="min-w-0"
     >
-      <Card className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow group h-full flex flex-col">
+      <Card
+        className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow group h-full flex flex-col cursor-pointer"
+        onClick={onCardClick}
+      >
         <div className={`relative w-full aspect-square ${pastelColor} flex items-center justify-center overflow-hidden`}>
           {product.imageUrl ? (
             <img
@@ -2307,10 +2406,18 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
             </div>
           )}
           {inStock && (
-            <Badge className="absolute top-2 right-2 bg-green-600 text-white hover:bg-green-600 text-[10px] font-semibold shadow-sm border-0">
+            <Badge className="absolute top-2 left-2 bg-green-600 text-white hover:bg-green-600 text-[10px] font-semibold shadow-sm border-0">
               {t('inStock', language)}
             </Badge>
           )}
+          {/* Share Button */}
+          <button
+            onClick={onShareClick}
+            className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-colors"
+            aria-label="Share product"
+          >
+            <Share2 className="w-4 h-4 text-gray-600" />
+          </button>
         </div>
 
         <CardContent className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5">
@@ -2428,7 +2535,10 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
                     ? 'bg-[#FFB300] hover:bg-[#FFB300]/90 text-white'
                     : 'bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white'
               }`}
-              onClick={onAddToCart}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToCart();
+              }}
               disabled={!inStock || (isCustom && (!customWeight || parseFloat(customWeight) <= 0))}
             >
               {isAdded ? (
@@ -2440,7 +2550,10 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
 
             <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden shrink-0 self-center order-2 sm:order-1">
               <button
-                onClick={() => onQtyChange(Math.max(1, selectedQty - 1))}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQtyChange(Math.max(1, selectedQty - 1));
+                }}
                 className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
               >
                 <Minus className="w-3 h-3" />
@@ -2449,7 +2562,10 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
                 {selectedQty}
               </span>
               <button
-                onClick={() => onQtyChange(selectedQty + 1)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQtyChange(selectedQty + 1);
+                }}
                 className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
               >
                 <Plus className="w-3 h-3" />
@@ -2459,6 +2575,270 @@ function ProductCard({ product, language, selectedUnit, selectedQty, isAdded, cu
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+// ─── Product Detail Modal Content ──────────────
+interface ProductDetailModalContentProps {
+  productId: string;
+  products: Product[];
+  language: Language;
+  selectedUnit: string;
+  setSelectedUnit: (unit: string) => void;
+  selectedQty: number;
+  setSelectedQty: (qty: number) => void;
+  customWeight: string;
+  setCustomWeight: (val: string) => void;
+  onAddToCart: (unit: string, qty: number) => void;
+  onShare: () => void;
+  closeModal: () => void;
+  isAdded: boolean;
+}
+
+function ProductDetailModalContent({
+  productId,
+  products,
+  language,
+  selectedUnit,
+  setSelectedUnit,
+  selectedQty,
+  setSelectedQty,
+  customWeight,
+  setCustomWeight,
+  onAddToCart,
+  onShare,
+  closeModal,
+  isAdded,
+}: ProductDetailModalContentProps) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return null;
+
+  // Reset unit when product changes
+  useEffect(() => {
+    const rawAvailableUnits: string[] = (() => {
+      try {
+        const parsed = JSON.parse(product.availableUnits);
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [product.baseUnit];
+      } catch { return [product.baseUnit]; }
+    })();
+    const WEIGHT_VOLUME_PATTERN = /^\s*\d+(\.\d+)?\s*(g|gm|gms|kg|ml|l|litre|liter)\s*$/i;
+    const availableUnits: string[] =
+      product.unitType === 'piece'
+        ? (() => {
+            const cleaned = rawAvailableUnits.filter((u) => !WEIGHT_VOLUME_PATTERN.test(u));
+            return cleaned.length > 0 ? cleaned : [product.baseUnit];
+          })()
+        : rawAvailableUnits;
+    const isSingleFixedItem = availableUnits.length <= 1;
+    if (!selectedUnit) {
+      setSelectedUnit(isSingleFixedItem ? (availableUnits[0] || product.baseUnit) : product.baseUnit);
+    }
+  }, [product, selectedUnit, setSelectedUnit]);
+
+  const rawAvailableUnits: string[] = (() => {
+    try {
+      const parsed = JSON.parse(product.availableUnits);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [product.baseUnit];
+    } catch { return [product.baseUnit]; }
+  })();
+
+  const WEIGHT_VOLUME_PATTERN = /^\s*\d+(\.\d+)?\s*(g|gm|gms|kg|ml|l|litre|liter)\s*$/i;
+  const availableUnits: string[] =
+    product.unitType === 'piece'
+      ? (() => {
+          const cleaned = rawAvailableUnits.filter((u) => !WEIGHT_VOLUME_PATTERN.test(u));
+          return cleaned.length > 0 ? cleaned : [product.baseUnit];
+        })()
+      : rawAvailableUnits;
+
+  const isSingleFixedItem = availableUnits.length <= 1;
+
+  const isCustom = !isSingleFixedItem && selectedUnit === 'custom';
+  const effectiveUnit = isSingleFixedItem ? (availableUnits[0] || product.baseUnit) : selectedUnit;
+  const displayUnit = isCustom && customWeight
+    ? formatCustomWeight(customWeight, product.unitType)
+    : effectiveUnit;
+  const unitPrice = displayUnit ? calculatePrice(product.basePrice, product.baseUnit, displayUnit) : 0;
+
+  const handleAdd = () => {
+    if (isCustom && (!customWeight || parseFloat(customWeight) <= 0)) {
+      toast.error('Please enter a valid weight');
+      return;
+    }
+    let finalUnit = selectedUnit;
+    if (isCustom && customWeight) {
+      finalUnit = formatCustomWeight(customWeight, product.unitType);
+    }
+    onAddToCart(finalUnit, selectedQty);
+  };
+
+  const displayName = getLocalName(product, language);
+  const displayDescription = getLocalDescription(product, language);
+  const pastelColor = getPastelColor(product.name);
+  const initial = product.name.charAt(0).toUpperCase();
+  const inStock = product.stock > 0;
+
+  return (
+    <div className="p-4 sm:p-6">
+      <button
+        onClick={closeModal}
+        className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+      >
+        <X className="w-5 h-5 text-gray-500" />
+      </button>
+
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Image */}
+        <div className={`w-full md:w-1/2 aspect-square ${pastelColor} rounded-xl overflow-hidden flex items-center justify-center`}>
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt={displayName} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-6xl font-bold text-gray-300">{initial}</span>
+          )}
+        </div>
+
+        {/* Details */}
+        <div className="flex-1 space-y-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">{displayName}</h2>
+            <p className="text-sm text-gray-500 mt-1">{displayDescription}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge variant={inStock ? 'default' : 'destructive'} className="text-xs">
+              {inStock ? t('inStock', language) : t('outOfStock', language)}
+            </Badge>
+            <span className="text-sm text-gray-400">
+              SKU: {product.id.slice(0, 8)}
+            </span>
+          </div>
+
+          {/* Unit Selection */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Select Unit</Label>
+            {isSingleFixedItem ? (
+              <div className="p-2 bg-gray-50 border rounded-md text-sm">
+                {availableUnits[0] || product.baseUnit}
+              </div>
+            ) : (
+              <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose unit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableUnits.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {unit} — {formatPrice(calculatePrice(product.basePrice, product.baseUnit, unit))}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom" className="font-medium text-[#8D6E63] bg-[#D7CCC8]/50">
+                    ✏️ Custom weight...
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
+            {isCustom && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    step={product.unitType === 'piece' ? 1 : 50}
+                    value={customWeight}
+                    onChange={(e) => setCustomWeight(e.target.value)}
+                    placeholder={getCustomInputPlaceholder(product.unitType)}
+                    className="flex-1"
+                  />
+                  <span className="text-sm text-gray-500">{getCustomInputLabel(product.unitType)}</span>
+                </div>
+                {product.unitType !== 'piece' && (
+                  <div className="flex flex-wrap gap-1">
+                    {[50, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000].map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => setCustomWeight(String(g))}
+                        className={`px-2 py-1 text-xs rounded border ${
+                          customWeight === String(g)
+                            ? 'bg-[#8D6E63] text-white border-[#8D6E63]'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#8D6E63]/50'
+                        }`}
+                      >
+                        {g >= 1000 ? `${g/1000}kg` : `${g}g`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {product.unitType === 'piece' && (
+                  <div className="flex flex-wrap gap-1">
+                    {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setCustomWeight(String(n))}
+                        className={`px-2 py-1 text-xs rounded border ${
+                          customWeight === String(n)
+                            ? 'bg-[#8D6E63] text-white border-[#8D6E63]'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#8D6E63]/50'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setSelectedQty(Math.max(1, selectedQty - 1))}
+                className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <span className="w-10 h-9 flex items-center justify-center text-sm font-medium text-gray-700 border-x border-gray-200">
+                {selectedQty}
+              </span>
+              <button
+                onClick={() => setSelectedQty(selectedQty + 1)}
+                className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="text-lg font-bold text-[#8D6E63]">
+              {displayUnit && unitPrice > 0
+                ? <>{formatPrice(unitPrice * selectedQty)} <span className="text-sm font-normal text-gray-400">/ {displayUnit}</span></>
+                : <span className="text-sm font-normal text-gray-400">{t('selectUnit', language)}</span>
+              }
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button
+              className="flex-1 bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+              onClick={handleAdd}
+              disabled={!inStock || (isCustom && (!customWeight || parseFloat(customWeight) <= 0))}
+            >
+              {isAdded ? (
+                <><CheckCircle2 className="w-4 h-4 mr-2" /> {t('added', language)}</>
+              ) : (
+                <><ShoppingCart className="w-4 h-4 mr-2" /> {t('addToCart', language)}</>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-[#8D6E63] text-[#8D6E63] hover:bg-[#D7CCC8]"
+              onClick={onShare}
+            >
+              <Share2 className="w-4 h-4 mr-2" /> Share
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
