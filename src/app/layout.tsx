@@ -20,20 +20,24 @@ export const metadata: Metadata = {
   title: "UK MART - Fresh Groceries Delivered",
   description:
     "Quality grocery products at wholesale prices. Fresh fruits, vegetables, dairy, staples and more. Minimum order ₹2,500.",
+
+  // ── Favicon (browser tab) ──
   icons: {
-    icon: "/logo.png", // Changed from .svg to .png for better compatibility
-    shortcut: "/logo.png",
-    apple: "/apple-touch-icon.png", // Optional – create this in public/ if you want
+    icon: "/favicon.png",          // ✅ Your actual file name
+    shortcut: "/favicon.png",
+    // apple: "/apple-touch-icon.png", // Optional – create if needed
   },
+
+  // ── Open Graph (WhatsApp, Facebook, LinkedIn, etc.) ──
   openGraph: {
     title: "UK MART - Fresh Groceries Delivered",
     description:
       "Quality grocery products at wholesale prices. Fresh fruits, vegetables, dairy, staples and more.",
-    url: "https://ukmart.co.in",
+    url: "https://ukmart.co.in",          // Adjust if you use www
     siteName: "UK MART",
     images: [
       {
-        url: "https://ukmart.co.in/logo.png",
+        url: "https://ukmart.co.in/og-image.png",  // ✅ Your 1200×630 banner
         width: 1200,
         height: 630,
         alt: "UK MART Logo",
@@ -42,12 +46,14 @@ export const metadata: Metadata = {
     locale: "en_IN",
     type: "website",
   },
+
+  // ── Twitter Card (for X/Twitter previews) ──
   twitter: {
     card: "summary_large_image",
     title: "UK MART - Fresh Groceries Delivered",
     description:
       "Quality grocery products at wholesale prices. Fresh fruits, vegetables, dairy, staples and more.",
-    images: ["https://ukmart.co.in/logo.png"],
+    images: ["https://ukmart.co.in/og-image.png"],
   },
 };
 
@@ -59,7 +65,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* JSON‑LD Structured Data for Organization */}
+        {/* JSON‑LD Structured Data for SEO */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -72,7 +78,7 @@ export default function RootLayout({
               "image": "https://ukmart.co.in/logo.png",
               "sameAs": [
                 "https://www.instagram.com/_uk_mart_"
-                // 👆 Add your Facebook URL here too if you have one
+                // Add Facebook/Twitter links if available
               ],
             }),
           }}
