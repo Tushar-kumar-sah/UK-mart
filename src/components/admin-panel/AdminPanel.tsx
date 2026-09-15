@@ -190,7 +190,7 @@ interface Offer {
 interface UserItem {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   googleId: string | null;
   avatar: string | null;
   phone: string | null;
@@ -271,6 +271,8 @@ export default function AdminPanel() {
 
   // ── Product search filter ──
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  // ── User search filter ──
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   const [loading, setLoading] = useState<Record<Section, boolean>>({
     dashboard: false,
@@ -324,6 +326,19 @@ export default function AdminPanel() {
         p.description.toLowerCase().includes(q)
     );
   }, [products, productSearchQuery]);
+
+  // ── Filter users by search query ──
+  const filteredUsers = useMemo(() => {
+    if (!userSearchQuery.trim()) return users;
+    const q = userSearchQuery.toLowerCase().trim();
+    return users.filter(
+      (u) =>
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q) ||
+        u.phone?.toLowerCase().includes(q) ||
+        u.address?.toLowerCase().includes(q)
+    );
+  }, [users, userSearchQuery]);
 
   // ── API callbacks ──
   const setLoadingFor = useCallback((section: Section, value: boolean) => {
@@ -537,7 +552,7 @@ export default function AdminPanel() {
           </CardHeader>
           <CardContent className="flex justify-center">
             <Button
-              className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md shadow-green-500/20 border-0"
               onClick={() => signIn('google', { callbackUrl: '/admin' })}
             >
               Sign in with Google
@@ -903,8 +918,18 @@ export default function AdminPanel() {
                           className="size-8 text-red-500 hover:text-red-700"
                           onClick={async () => {
                             if (confirm('Delete this product?')) {
-                              await fetch(`/api/products?id=${product.id}`, { method: 'DELETE' });
-                              fetchProducts();
+                              try {
+                                const res = await fetch(`/api/products?id=${product.id}`, { method: 'DELETE' });
+                                if (res.ok) {
+                                  toast.success('Product deleted successfully');
+                                  fetchProducts();
+                                } else {
+                                  const data = await res.json().catch(() => ({}));
+                                  toast.error(data.error || 'Failed to delete product');
+                                }
+                              } catch {
+                                toast.error('Network error deleting product');
+                              }
                             }
                           }}
                         >
@@ -1180,13 +1205,23 @@ export default function AdminPanel() {
                               size="sm"
                               className="h-8"
                               onClick={async () => {
-                                await fetch('/api/products', {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ id: item.id, stock: editStockValue }),
-                                });
-                                setEditingStockId(null);
-                                fetchStock();
+                                try {
+                                  const res = await fetch('/api/products', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: item.id, stock: editStockValue }),
+                                  });
+                                  if (res.ok) {
+                                    toast.success('Stock updated successfully');
+                                    setEditingStockId(null);
+                                    fetchStock();
+                                  } else {
+                                    const data = await res.json().catch(() => ({}));
+                                    toast.error(data.error || 'Failed to update stock');
+                                  }
+                                } catch {
+                                  toast.error('Network error updating stock');
+                                }
                               }}
                             >
                               Save
@@ -1318,8 +1353,18 @@ export default function AdminPanel() {
                             className="size-8 text-red-500"
                             onClick={async () => {
                               if (confirm('Delete this offer?')) {
-                                await fetch(`/api/offers?id=${offer.id}`, { method: 'DELETE' });
-                                fetchOffers();
+                                try {
+                                  const res = await fetch(`/api/offers?id=${offer.id}`, { method: 'DELETE' });
+                                  if (res.ok) {
+                                    toast.success('Offer deleted successfully');
+                                    fetchOffers();
+                                  } else {
+                                    const data = await res.json().catch(() => ({}));
+                                    toast.error(data.error || 'Failed to delete offer');
+                                  }
+                                } catch {
+                                  toast.error('Network error deleting offer');
+                                }
                               }
                             }}
                           >
@@ -1427,12 +1472,22 @@ export default function AdminPanel() {
                         <Select
                           value={order.status}
                           onValueChange={async (value) => {
-                            await fetch('/api/orders', {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ id: order.id, status: value }),
-                            });
-                            fetchOrders();
+                            try {
+                              const res = await fetch('/api/orders', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: order.id, status: value }),
+                              });
+                              if (res.ok) {
+                                toast.success(`Order status updated to ${value}`);
+                                fetchOrders();
+                              } else {
+                                const data = await res.json().catch(() => ({}));
+                                toast.error(data.error || 'Failed to update order status');
+                              }
+                            } catch {
+                              toast.error('Network error updating order status');
+                            }
                           }}
                         >
                           <SelectTrigger className="w-32 h-8 text-xs">
@@ -1570,13 +1625,26 @@ export default function AdminPanel() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-2xl font-bold">Users</h2>
-          <p className="text-sm text-muted-foreground">{users.length} registered users</p>
+          <h2 className="text-2xl font-bold">Users & Customers</h2>
+          <p className="text-sm text-muted-foreground">
+            {filteredUsers.length} of {users.length} registered users
+          </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchUsers} disabled={loading.users}>
-          <RefreshCw className={`size-4 mr-1 ${loading.users ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search name, phone, email, address..."
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchUsers} disabled={loading.users}>
+            <RefreshCw className={`size-4 mr-1 ${loading.users ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <Card className="border shadow-none">
@@ -1585,9 +1653,10 @@ export default function AdminPanel() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Phone Number</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead>Delivery Address</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Orders</TableHead>
                   <TableHead>Joined</TableHead>
@@ -1595,7 +1664,7 @@ export default function AdminPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -1606,35 +1675,70 @@ export default function AdminPanel() {
                             className="size-8 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="size-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                          <div className="size-8 rounded-full bg-gradient-to-br from-green-100 to-emerald-50 text-green-700 flex items-center justify-center text-xs font-bold shadow-xs">
                             {user.name?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                         )}
-                        <span className="font-medium">{user.name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-900">{user.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            ID: {user.id.slice(0, 8)}
+                          </span>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{user.email}</TableCell>
-                    <TableCell className="text-sm">{user.phone || '—'}</TableCell>
+                    <TableCell className="text-sm">
+                      {user.phone ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-gray-900">+91 {user.phone}</span>
+                          <a
+                            href={`https://wa.me/91${user.phone}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.5 rounded transition-colors"
+                            title="Chat on WhatsApp"
+                          >
+                            WhatsApp
+                          </a>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {user.email ? (
+                        <span>{user.email}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Phone account</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={user.address || ''}>
+                      {user.address || '—'}
+                    </TableCell>
                     <TableCell>
-                      <Badge variant={user.role === 'ADMIN' ? 'default' : 'outline'}>
+                      <Badge variant={user.role === 'ADMIN' ? 'default' : 'outline'} className={user.role === 'ADMIN' ? 'bg-green-600' : ''}>
                         {user.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>{user._count.orders}</TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {user._count?.orders || 0} orders
+                      </span>
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {formatDate(user.createdAt)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.isActive ? 'default' : 'secondary'}>
+                      <Badge variant={user.isActive ? 'default' : 'secondary'} className={user.isActive ? 'bg-green-50 text-green-700 border-green-200' : ''}>
                         {user.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
                   </TableRow>
                 ))}
-                {users.length === 0 && (
+                {filteredUsers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No users found
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      {userSearchQuery ? 'No users match your search' : 'No users registered yet'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -2015,30 +2119,36 @@ function ProductDialog({
   }, [product, open]);
 
   const handleSave = async () => {
-    if (!form.name || !form.categoryId || !form.basePrice) {
-      alert('Name, category, and price are required.');
+    if (!form.name.trim() || !form.categoryId || !form.basePrice) {
+      toast.error('Name, category, and price are required');
       return;
     }
 
     setSaving(true);
     try {
-      if (isEditing) {
-        await fetch('/api/products', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: product!.id, ...form }),
-        });
+      const res = isEditing
+        ? await fetch('/api/products', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: product!.id, ...form }),
+          })
+        : await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form),
+          });
+
+      if (res.ok) {
+        toast.success(isEditing ? 'Product updated successfully' : 'Product created successfully');
+        onOpenChange(false);
+        onSaved();
       } else {
-        await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        });
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to save product');
       }
-      onOpenChange(false);
-      onSaved();
     } catch (err) {
       console.error('Save product error:', err);
+      toast.error('Network error saving product');
     } finally {
       setSaving(false);
     }
@@ -2276,8 +2386,8 @@ function CategoryDialog({
   }, [category, open]);
 
   const handleSave = async () => {
-    if (!form.name) {
-      alert('Category name is required.');
+    if (!form.name.trim()) {
+      toast.error('Category name is required');
       return;
     }
 
@@ -2289,23 +2399,29 @@ function CategoryDialog({
         sortOrder: parseInt(form.sortOrder, 10) || 0,
       };
 
-      if (isEditing) {
-        await fetch('/api/categories', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: category!.id, ...payload }),
-        });
+      const res = isEditing
+        ? await fetch('/api/categories', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: category!.id, ...payload }),
+          })
+        : await fetch('/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+      if (res.ok) {
+        toast.success(isEditing ? 'Category updated' : 'Category created');
+        onOpenChange(false);
+        onSaved();
       } else {
-        await fetch('/api/categories', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to save category');
       }
-      onOpenChange(false);
-      onSaved();
     } catch (err) {
       console.error('Save category error:', err);
+      toast.error('Network error saving category');
     } finally {
       setSaving(false);
     }
@@ -2472,30 +2588,36 @@ function OfferDialog({
   }, [offer, open]);
 
   const handleSave = async () => {
-    if (!form.name || !form.discountValue) {
-      alert('Offer name and discount value are required.');
+    if (!form.name.trim() || !form.discountValue) {
+      toast.error('Offer name and discount value are required');
       return;
     }
 
     setSaving(true);
     try {
-      if (isEditing) {
-        await fetch('/api/offers', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: offer!.id, ...form }),
-        });
+      const res = isEditing
+        ? await fetch('/api/offers', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: offer!.id, ...form }),
+          })
+        : await fetch('/api/offers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form),
+          });
+
+      if (res.ok) {
+        toast.success(isEditing ? 'Offer updated successfully' : 'Offer created successfully');
+        onOpenChange(false);
+        onSaved();
       } else {
-        await fetch('/api/offers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        });
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to save offer');
       }
-      onOpenChange(false);
-      onSaved();
     } catch (err) {
       console.error('Save offer error:', err);
+      toast.error('Network error saving offer');
     } finally {
       setSaving(false);
     }

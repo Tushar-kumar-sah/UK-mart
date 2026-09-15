@@ -167,12 +167,12 @@ const CATEGORY_EMOJI: Record<string, string> = {
 };
 
 const PASTEL_COLORS = [
-  'bg-[#D7CCC8]',
-  'bg-[#FFB300]/30',
-  'bg-[#8D6E63]/20',
-  'bg-[#FFB300]/20',
-  'bg-[#D7CCC8]/60',
-  'bg-[#8D6E63]/10',
+  'bg-gradient-to-br from-emerald-50 to-green-100',
+  'bg-gradient-to-br from-amber-50 to-yellow-100',
+  'bg-gradient-to-br from-orange-50 to-amber-100',
+  'bg-gradient-to-br from-lime-50 to-emerald-100',
+  'bg-gradient-to-br from-yellow-50 to-orange-100',
+  'bg-gradient-to-br from-teal-50 to-cyan-100',
 ];
 
 const LANG_MAP: Record<string, { value: Language; label: string; flag: string }> = {
@@ -329,7 +329,7 @@ export default function StoreFront() {
 
   // ── Share product ──
   const shareProduct = useCallback((productId: string) => {
-    const url = `${window.location.origin}${window.location.pathname}?product=${productId}`;
+    const url = `${window.location.origin}/product/${productId}`;
     if (navigator.share) {
       navigator.share({
         title: 'Check out this product',
@@ -768,7 +768,7 @@ export default function StoreFront() {
       sessionStorage.setItem('pendingCheckout', 'true');
       sessionStorage.setItem('pendingCart', JSON.stringify(cart));
       sessionStorage.setItem('pendingDeliveryForm', JSON.stringify(deliveryForm));
-      signIn('google', { callbackUrl: window.location.pathname });
+      router.push('/login?callbackUrl=' + encodeURIComponent(window.location.pathname + window.location.search));
       return;
     }
 
@@ -868,7 +868,7 @@ export default function StoreFront() {
           email: user?.email || '',
         },
         theme: {
-          color: '#8D6E63',
+          color: '#16a34a',
         },
         modal: {
           ondismiss: () => {
@@ -988,17 +988,20 @@ export default function StoreFront() {
   // RENDER
   // ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col bg-white overflow-x-hidden w-full">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-white via-gray-50/30 to-white overflow-x-hidden w-full">
       <Suspense fallback={null}>
         <ProductUrlHandler onProductId={setUrlProductId} />
       </Suspense>
 
       {/* ============ HEADER ============ */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+      <header className="sticky top-0 z-50">
+        {/* Gradient accent bar */}
+        <div className="h-1 bg-gradient-to-r from-green-500 via-yellow-400 to-amber-500" />
+        <div className="glass border-b border-white/20 shadow-lg shadow-black/[0.03]">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
             <div
-              className="flex items-center gap-2 shrink-0 cursor-pointer"
+              className="flex items-center gap-2 shrink-0 cursor-pointer group"
               onClick={() => {
                 setSelectedCategory(null);
                 setSelectedSubcategory(null);
@@ -1006,48 +1009,51 @@ export default function StoreFront() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
-              <div className="relative h-12 w-12 sm:h-16 sm:w-16 shrink-0">
-                <Image src="/logo.png" alt="UK MART" fill className="object-contain" priority unoptimized />
+              <div className="relative h-11 w-11 sm:h-14 sm:w-14 shrink-0 transition-transform group-hover:scale-105">
+                <Image src="/logo.png" alt="UK MART" fill className="object-contain drop-shadow-md" priority unoptimized />
               </div>
-              <span className="text-base sm:text-xl font-bold text-[#8D6E63] hidden sm:block">
-                {t('storeName', language)}
-              </span>
+              <div className="hidden sm:block">
+                <span className="text-lg sm:text-xl font-extrabold bg-gradient-to-r from-green-600 via-amber-600 to-amber-700 bg-clip-text text-transparent">
+                  {t('storeName', language)}
+                </span>
+                <p className="text-[10px] text-gray-400 font-medium -mt-0.5 tracking-wide">Fresh Groceries Delivered</p>
+              </div>
             </div>
 
             <div className="hidden md:flex flex-1 max-w-lg mx-4">
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="relative w-full group">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-green-500 transition-colors" />
                 <Input
                   placeholder={t('searchPlaceholder', language)}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 rounded-full border-gray-200 bg-gray-50 focus:bg-white h-10"
+                  className="pl-10 rounded-full border-gray-200/80 bg-gray-50/80 focus:bg-white focus:border-green-300 focus:ring-green-200 h-10 shadow-sm transition-all"
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-100 transition-colors">
                     <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="hidden sm:flex gap-1 text-gray-600 hover:text-gray-900">
+                  <Button variant="ghost" size="sm" className="hidden sm:flex gap-1.5 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors">
                     <Globe className="w-4 h-4" />
                     <span className="text-xs">{LANG_MAP[language]?.flag}</span>
                     <ChevronDown className="w-3 h-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-xl border-gray-100">
                   <DropdownMenuLabel>{t('language', language)}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {Object.values(LANG_MAP).map((lang) => (
                     <DropdownMenuItem
                       key={lang.value}
                       onClick={() => setLanguage(lang.value)}
-                      className={language === lang.value ? 'bg-[#D7CCC8] text-[#8D6E63] font-medium' : ''}
+                      className={`rounded-lg ${language === lang.value ? 'bg-green-50 text-green-700 font-medium' : ''}`}
                     >
                       <span className="mr-2">{lang.flag}</span>
                       {lang.label}
@@ -1059,37 +1065,41 @@ export default function StoreFront() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative text-gray-600 hover:text-[#8D6E63] h-9 w-9 sm:h-10 sm:w-10"
+                className="relative text-gray-600 hover:text-green-600 hover:bg-green-50 h-9 w-9 sm:h-10 sm:w-10 rounded-full transition-colors"
                 onClick={() => setLocationDialogOpen(true)}
                 aria-label="Set delivery location"
               >
                 <MapPinIcon className="w-5 h-5" />
                 {isMounted && userLocation && (
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border border-white" />
+                  <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse-glow" />
                 )}
               </Button>
 
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative text-gray-600 hover:text-[#8D6E63] h-9 w-9 sm:h-10 sm:w-10"
+                className="relative text-gray-600 hover:text-green-600 hover:bg-green-50 h-9 w-9 sm:h-10 sm:w-10 rounded-full transition-colors"
                 onClick={() => setCartOpen(true)}
               >
                 <ShoppingCart className="w-5 h-5" />
                 {isMounted && cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#8D6E63] text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1 -right-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-lg shadow-green-500/30"
+                  >
                     {cartCount > 99 ? '99+' : cartCount}
-                  </span>
+                  </motion.span>
                 )}
               </Button>
 
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="hidden sm:flex items-center gap-2 text-gray-700">
-                      <Avatar className="w-7 h-7">
+                    <Button variant="ghost" size="sm" className="hidden sm:flex items-center gap-2 text-gray-700 hover:bg-green-50 rounded-full px-2">
+                      <Avatar className="w-7 h-7 ring-2 ring-green-200 ring-offset-1">
                         <AvatarImage src={session.user?.image || undefined} />
-                        <AvatarFallback className="bg-[#D7CCC8] text-[#8D6E63] text-xs">
+                        <AvatarFallback className="bg-gradient-to-br from-green-400 to-emerald-500 text-white text-xs font-bold">
                           {session.user?.name?.charAt(0).toUpperCase() || 'U'}
                         </AvatarFallback>
                       </Avatar>
@@ -1097,7 +1107,7 @@ export default function StoreFront() {
                       <ChevronDown className="w-3 h-3" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl border-gray-100">
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium">{session.user?.name}</p>
@@ -1111,12 +1121,12 @@ export default function StoreFront() {
                         fetchUserProfile();
                         fetchUserOrders();
                       }}
-                      className="cursor-pointer"
+                      className="cursor-pointer rounded-lg"
                     >
                       <User className="w-4 h-4 mr-2" />
                       My Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600">
+                    <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600 rounded-lg">
                       <LogOut className="w-4 h-4 mr-2" />
                       {t('logout', language)}
                     </DropdownMenuItem>
@@ -1126,15 +1136,15 @@ export default function StoreFront() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="hidden sm:flex border-[#8D6E63] text-[#8D6E63] hover:bg-[#D7CCC8] text-xs"
-                  onClick={() => signIn('google')}
+                  className="hidden sm:flex border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 text-xs rounded-full px-4 transition-colors"
+                  onClick={() => router.push('/login')}
                 >
                   <User className="w-3.5 h-3.5 mr-1.5" />
                   {t('login', language)}
                 </Button>
               )}
 
-              <Button variant="ghost" size="icon" className="md:hidden text-gray-600 h-9 w-9" onClick={() => setMobileMenuOpen(true)}>
+              <Button variant="ghost" size="icon" className="md:hidden text-gray-600 h-9 w-9 rounded-full hover:bg-green-50" onClick={() => setMobileMenuOpen(true)}>
                 <Menu className="w-5 h-5" />
               </Button>
             </div>
@@ -1142,13 +1152,13 @@ export default function StoreFront() {
         </div>
 
         <div className="md:hidden px-3 pb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <div className="relative group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-green-500 transition-colors" />
             <Input
               placeholder={t('searchPlaceholder', language)}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 rounded-full border-gray-200 bg-gray-50 focus:bg-white h-9 text-sm"
+              className="pl-10 rounded-full border-gray-200/80 bg-gray-50/80 focus:bg-white focus:border-green-300 h-9 text-sm shadow-sm transition-all"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1156,6 +1166,7 @@ export default function StoreFront() {
               </button>
             )}
           </div>
+        </div>
         </div>
       </header>
 
@@ -1170,7 +1181,7 @@ export default function StoreFront() {
               <div className="relative h-14 w-14 shrink-0">
                 <Image src="/logo.png" alt="UK MART" fill className="object-contain" unoptimized />
               </div>
-              <span className="text-lg font-bold text-[#8D6E63]">{t('storeName', language)}</span>
+              <span className="text-lg font-bold text-green-700">{t('storeName', language)}</span>
             </div>
             <Separator className="mb-4" />
 
@@ -1183,7 +1194,7 @@ export default function StoreFront() {
                     onClick={() => setLanguage(lang.value)}
                     className={`flex-1 py-2 px-3 rounded-lg text-sm border transition-all ${
                       language === lang.value
-                        ? 'border-[#8D6E63] bg-[#D7CCC8] text-[#8D6E63] font-medium'
+                        ? 'border-green-300 bg-green-50 text-green-700 font-medium'
                         : 'border-gray-200 text-gray-600 hover:border-gray-300'
                     }`}
                   >
@@ -1199,7 +1210,7 @@ export default function StoreFront() {
                 <div className="flex items-center gap-3 mb-3">
                   <Avatar className="w-10 h-10">
                     <AvatarImage src={session.user?.image || undefined} />
-                    <AvatarFallback className="bg-[#D7CCC8] text-[#8D6E63]">
+                    <AvatarFallback className="bg-green-50 text-green-700">
                       {session.user?.name?.charAt(0).toUpperCase() || 'U'}
                     </AvatarFallback>
                   </Avatar>
@@ -1250,8 +1261,8 @@ export default function StoreFront() {
               </div>
             ) : (
               <Button
-                className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90"
-                onClick={() => { signIn('google'); setMobileMenuOpen(false); }}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                onClick={() => { setMobileMenuOpen(false); router.push('/login'); }}
               >
                 <User className="w-4 h-4 mr-2" /> {t('login', language)}
               </Button>
@@ -1275,7 +1286,7 @@ export default function StoreFront() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MapPinIcon className="w-5 h-5 text-[#8D6E63]" />
+              <MapPinIcon className="w-5 h-5 text-green-700" />
               Set your delivery location
             </DialogTitle>
             <DialogDescription>
@@ -1287,7 +1298,7 @@ export default function StoreFront() {
           <div className="space-y-4 py-2">
             <Button
               variant="default"
-              className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
               onClick={detectLocation}
               disabled={locationLoading}
             >
@@ -1339,7 +1350,7 @@ export default function StoreFront() {
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <User className="w-5 h-5 text-[#8D6E63]" />
+              <User className="w-5 h-5 text-green-700" />
               My Profile
             </DialogTitle>
             <DialogDescription>Your account details and order history</DialogDescription>
@@ -1364,7 +1375,7 @@ export default function StoreFront() {
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Order History</h3>
               {ordersLoading ? (
                 <div className="flex justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#8D6E63]" />
+                  <Loader2 className="w-6 h-6 animate-spin text-green-700" />
                 </div>
               ) : userOrders.length === 0 ? (
                 <p className="text-gray-500 text-sm">You haven't placed any orders yet.</p>
@@ -1428,7 +1439,7 @@ export default function StoreFront() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="mt-2 text-xs border-[#8D6E63] text-[#8D6E63] hover:bg-[#D7CCC8]"
+                              className="mt-2 text-xs border-green-300 text-green-700 hover:bg-green-50"
                               onClick={() => {
                                 setSelectedOrderId(order.id);
                                 setRatingValue(0);
@@ -1492,7 +1503,7 @@ export default function StoreFront() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRatingOpen(false)}>Cancel</Button>
             <Button
-              className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0"
               onClick={handleSubmitRating}
               disabled={submittingRating || ratingValue === 0}
             >
@@ -1506,14 +1517,14 @@ export default function StoreFront() {
       {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1 w-full">
         {/* Hero */}
-        <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none bg-[#D7CCC8] overflow-hidden">
+        <section className="relative w-full min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none overflow-hidden">
           <AnimatePresence mode="sync">
             <motion.div
               key={bannerIndex}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.8, ease: 'easeInOut' }}
+              transition={{ duration: 1, ease: 'easeInOut' }}
               className="absolute inset-0"
             >
               <Image
@@ -1526,16 +1537,23 @@ export default function StoreFront() {
               />
             </motion.div>
           </AnimatePresence>
-          <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/30 to-black/10 sm:bg-linear-to-r sm:from-black/75 sm:via-black/45 sm:to-black/10" />
+          
+          {/* Gradient overlay — richer, more colorful */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-emerald-900/20 sm:bg-gradient-to-r sm:from-black/80 sm:via-black/50 sm:to-transparent" />
+          
+          {/* Floating decorative dots */}
+          <div className="absolute top-10 right-10 w-32 h-32 bg-green-400/10 rounded-full blur-3xl animate-float hidden sm:block" />
+          <div className="absolute bottom-20 right-20 w-24 h-24 bg-amber-400/10 rounded-full blur-2xl animate-float hidden sm:block" style={{ animationDelay: '1s' }} />
 
+          {/* Banner indicator dots */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
             {HERO_BANNERS.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setBannerIndex(i)}
                 aria-label={`Go to slide ${i + 1}`}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === bannerIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/75'
+                className={`rounded-full transition-all duration-500 ${
+                  i === bannerIndex ? 'w-8 h-2 bg-gradient-to-r from-green-400 to-emerald-400' : 'w-2 h-2 bg-white/40 hover:bg-white/70'
                 }`}
               />
             ))}
@@ -1544,23 +1562,29 @@ export default function StoreFront() {
           <div className="relative z-10 max-w-7xl mx-auto px-4 xs:px-5 sm:px-8 md:px-14 flex items-center min-h-[55vw] xs:min-h-[50vw] sm:min-h-85 md:min-h-105 max-h-105 sm:max-h-none">
             <motion.div
               key={`text-${bannerIndex}`}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
+              transition={{ duration: 0.7, ease: 'easeOut' }}
               className="max-w-[88%] xs:max-w-md md:max-w-lg"
             >
-              <span className="inline-block text-[10px] xs:text-xs font-bold text-[#3a2a22] bg-[#FFB300] px-3 xs:px-4 py-1 xs:py-1.5 rounded-full mb-3 xs:mb-4 tracking-wider uppercase shadow-md">
+              <motion.span 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="inline-flex items-center gap-2 text-[10px] xs:text-xs font-bold text-white bg-gradient-to-r from-green-500 to-emerald-600 px-3 xs:px-4 py-1.5 xs:py-2 rounded-full mb-3 xs:mb-4 tracking-wider uppercase shadow-lg shadow-green-500/30"
+              >
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                 {t('storeName', language)}
-              </span>
+              </motion.span>
               <h1
-                className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-2 xs:mb-3 sm:mb-4 leading-[1.1]"
-                style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.45)' }}
+                className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-2 xs:mb-3 sm:mb-4 leading-[1.05] tracking-tight"
+                style={{ textShadow: '0 2px 4px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3)' }}
               >
                 {t('heroTitle', language)}
               </h1>
               <p
-                className="text-sm xs:text-base sm:text-lg text-white mb-3 xs:mb-4 sm:mb-5 leading-relaxed max-w-sm font-medium"
-                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
+                className="text-sm xs:text-base sm:text-lg text-white/90 mb-3 xs:mb-4 sm:mb-5 leading-relaxed max-w-sm font-medium"
+                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
               >
                 {userLocation
                   ? t('heroSubtitleWithLocation', language, {
@@ -1573,47 +1597,54 @@ export default function StoreFront() {
                 }
               </p>
               {isMounted && userLocation && deliveryDistance !== null && (
-                <p
-                  className="text-sm xs:text-base sm:text-lg text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm bg-black/30 backdrop-blur-sm rounded-full px-4 py-1.5 inline-block"
-                  style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)' }}
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-sm xs:text-base text-white font-semibold mb-4 xs:mb-5 sm:mb-7 leading-relaxed max-w-sm glass-dark rounded-full px-4 py-2 inline-flex items-center gap-2"
                 >
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
                   {isLocalDelivery
                     ? t('deliveryEstimateLocal', language)
                     : t('deliveryEstimateStandard', language)}
-                </p>
+                </motion.p>
               )}
-              <Button
-                size="lg"
-                className="bg-white text-[#5d4037] hover:bg-gray-100 rounded-full px-6 xs:px-8 sm:px-10 shadow-xl hover:shadow-2xl transition-all duration-300 font-bold text-sm sm:text-base"
-                onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                {t('shopNow', language)}
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-full px-6 xs:px-8 sm:px-10 shadow-xl shadow-green-500/30 hover:shadow-2xl hover:shadow-green-500/40 transition-all duration-300 font-bold text-sm sm:text-base border-0"
+                  onClick={() => document.getElementById('product-section')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  {t('shopNow', language)}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+                {!userLocation && (
+                  <Button
+                    size="lg"
+                    className="rounded-full bg-white/95 hover:bg-white text-gray-900 shadow-xl shadow-black/15 hover:shadow-2xl font-bold text-sm sm:text-base px-6 xs:px-8 border-0 backdrop-blur-md transition-all duration-300"
+                    onClick={() => setLocationDialogOpen(true)}
+                  >
+                    <MapPinIcon className="w-4 h-4 mr-2 text-green-600 shrink-0" />
+                    <span>Set Location</span>
+                  </Button>
+                )}
+              </div>
             </motion.div>
           </div>
         </section>
 
         {/* Category Bar */}
-        <section className="border-b border-gray-100 bg-white sticky top-14 sm:top-16 z-40">
+        <section className="border-b border-gray-100/80 bg-white/80 backdrop-blur-md sticky top-[calc(3.5rem+4px)] sm:top-[calc(4rem+4px)] z-40 shadow-sm">
           <div className="max-w-7xl mx-auto">
             <div
-              className="flex gap-2 py-3 overflow-x-auto px-3 sm:px-6 lg:px-8"
-              style={{
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-                WebkitOverflowScrolling: 'touch',
-              }}
+              className="flex gap-2 py-3 overflow-x-auto px-3 sm:px-6 lg:px-8 no-scrollbar scroll-fade-x"
             >
-              <style>{`
-                .no-scrollbar::-webkit-scrollbar { display: none; }
-              `}</style>
               <button
                 onClick={() => { setSelectedCategory(null); setSelectedSubcategory(null); }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-sm font-semibold whitespace-nowrap shrink-0 transition-all duration-300 ${
                   !selectedCategory
-                    ? 'border-[#8D6E63] bg-[#8D6E63] text-white shadow-md shadow-[#8D6E63]/30'
-                    : 'border-gray-200 text-gray-600 hover:border-[#8D6E63]/50 hover:text-[#8D6E63] bg-white'
+                    ? 'border-transparent bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/25 scale-[1.02]'
+                    : 'border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-700 hover:bg-green-50/50 bg-white'
                 }`}
               >
                 <span>🛒</span>
@@ -1626,13 +1657,13 @@ export default function StoreFront() {
                   <button
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-sm font-semibold whitespace-nowrap shrink-0 transition-all duration-300 ${
                       isSelected
-                        ? 'border-[#8D6E63] bg-[#8D6E63] text-white shadow-md shadow-[#8D6E63]/30'
-                        : 'border-gray-200 text-gray-600 hover:border-[#8D6E63]/50 hover:text-[#8D6E63] bg-white'
+                        ? 'border-transparent bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/25 scale-[1.02]'
+                        : 'border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-700 hover:bg-green-50/50 bg-white'
                     }`}
                   >
-                    <span>{emoji}</span>
+                    <span className="text-base">{emoji}</span>
                     {getLocalName(cat, language)}
                   </button>
                 );
@@ -1649,15 +1680,14 @@ export default function StoreFront() {
                   className="overflow-hidden"
                 >
                   <div
-                    className="flex gap-2 pb-3 overflow-x-auto px-3 sm:px-6 lg:px-8"
-                    style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+                    className="flex gap-2 pb-3 overflow-x-auto px-3 sm:px-6 lg:px-8 no-scrollbar"
                   >
                     <button
                       onClick={() => setSelectedSubcategory(null)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap shrink-0 transition-all ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 transition-all duration-300 ${
                         !selectedSubcategory
-                          ? 'bg-[#8D6E63]/10 border-[#8D6E63]/30 text-[#8D6E63]'
-                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                          ? 'bg-green-50 border-green-200 text-green-700'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-white'
                       }`}
                     >
                       {t('viewAll', language)}
@@ -1668,10 +1698,10 @@ export default function StoreFront() {
                         <button
                           key={sub.id}
                           onClick={() => setSelectedSubcategory(sub.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap shrink-0 transition-all ${
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 transition-all duration-300 ${
                             isSelected
-                              ? 'bg-[#8D6E63]/10 border-[#8D6E63]/30 text-[#8D6E63]'
-                              : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                              ? 'bg-green-50 border-green-200 text-green-700'
+                              : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-white'
                           }`}
                         >
                           {getLocalName(sub, language)}
@@ -1690,14 +1720,15 @@ export default function StoreFront() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-[#FFB300]/10 border-b border-[#FFB300]/30"
+            className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200/50"
           >
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2">
-              <p className="text-xs sm:text-sm text-[#8D6E63] text-center">
-                🛒 {userLocation && <span>📍 {userLocation} – </span>}
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5">
+              <p className="text-xs sm:text-sm text-amber-800 text-center font-medium flex items-center justify-center gap-2 flex-wrap">
+                <ShoppingBag className="w-4 h-4 text-amber-600" />
+                {userLocation && <span className="text-amber-600">📍 {userLocation} – </span>}
                 {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
                 {effectiveMinOrder !== DEFAULT_MIN_ORDER && (
-                  <span className="ml-1 text-green-600 font-medium">(Local ₹{effectiveMinOrder})</span>
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px] border-0">Local ₹{effectiveMinOrder}</Badge>
                 )}
               </p>
             </div>
@@ -1725,7 +1756,7 @@ export default function StoreFront() {
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
               <p className="text-gray-600 mb-4">{t('error', language)}</p>
-              <Button variant="outline" onClick={fetchData} className="border-[#8D6E63] text-[#8D6E63]">
+              <Button variant="outline" onClick={fetchData} className="border-green-300 text-green-700">
                 <Loader2 className="w-4 h-4 mr-2" />
                 {t('tryAgain', language)}
               </Button>
@@ -1740,24 +1771,26 @@ export default function StoreFront() {
           )}
 
           {!loading && !error && isBrowseAllView && (
-            <div className="space-y-10 sm:space-y-12">
+            <div className="space-y-12 sm:space-y-16">
               {productsByCategory.map(({ category, items }) => (
                 <div key={category.id} id={`cat-${category.id}`} className="scroll-mt-32">
-                  <div className="flex items-center justify-between mb-4 sm:mb-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl sm:text-2xl">{getCategoryEmoji(category.name)}</span>
+                  <div className="flex items-center justify-between mb-5 sm:mb-7">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-50 flex items-center justify-center shadow-sm">
+                        <span className="text-xl sm:text-2xl">{getCategoryEmoji(category.name)}</span>
+                      </div>
                       <div>
-                        <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
+                        <h2 className="text-lg sm:text-2xl font-bold text-gray-900 tracking-tight">
                           {getLocalName(category, language)}
                         </h2>
-                        <p className="text-xs sm:text-sm text-gray-500">
+                        <p className="text-xs sm:text-sm text-gray-400 font-medium">
                           {items.length} {language === 'hi' ? 'उत्पाद' : language === 'bn' ? 'পণ্য' : 'products'}
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={() => toggleCategory(category.id)}
-                      className="flex items-center gap-1 text-xs sm:text-sm font-medium text-[#8D6E63] hover:underline shrink-0"
+                      className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-full transition-all shrink-0"
                     >
                       {t('viewAll', language)} <ChevronRight className="w-3.5 h-3.5" />
                     </button>
@@ -1794,37 +1827,56 @@ export default function StoreFront() {
       </main>
 
       {/* ============ FOOTER ============ */}
-      <footer className="bg-gray-900 text-gray-300 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+      <footer className="bg-gradient-to-b from-gray-900 via-gray-900 to-black text-gray-300 mt-auto relative overflow-hidden">
+        {/* Decorative gradient orbs */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-green-500/5 rounded-full blur-[128px]" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-[128px]" />
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
             <div>
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-3 mb-5">
                 <div className="relative h-12 w-12 shrink-0">
                   <Image src="/logo.png" alt="UK MART" fill className="object-contain" unoptimized />
                 </div>
-                <span className="text-lg font-bold text-white">{t('storeName', language)}</span>
+                <div>
+                  <span className="text-xl font-extrabold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">{t('storeName', language)}</span>
+                  <p className="text-xs text-gray-500">Fresh Groceries Delivered</p>
+                </div>
               </div>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <p className="text-sm text-gray-400 leading-relaxed mb-6">
                 {language === 'hi'
                   ? 'UK MART आपके लिए ताज़ी और गुणवत्तापूर्ण ग्रोसरी उत्पाद थोक दरों पर लाता है। हम आपकी दैनिक ज़रूरतों को आपके दरवाज़े तक पहुँचाते हैं।'
                   : language === 'bn'
                   ? 'UK MART আপনার জন্য সতেজ এবং মানসম্পন্ন মুদি পণ্য পাইকারি দামে নিয়ে আসে। আমরা আপনার দৈনন্দিন প্রয়োজনীয়তা আপনার দরজায় পৌঁছে দিই।'
                   : 'UK MART brings you fresh and quality grocery products at wholesale prices. We deliver your daily essentials right to your doorstep.'}
               </p>
+              {/* Trust badges */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-white/5 rounded-full px-3 py-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-xs text-gray-400 font-medium">Quality Assured</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/5 rounded-full px-3 py-1.5">
+                  <Package className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs text-gray-400 font-medium">Fast Delivery</span>
+                </div>
+              </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-5">
                 {language === 'hi' ? 'श्रेणियाँ' : language === 'bn' ? 'বিভাগ' : 'Quick Links'}
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {parentCategories.map((cat) => (
                   <li key={cat.id}>
                     <button
                       onClick={() => scrollToCategorySection(cat.id)}
-                      className="text-sm text-gray-400 hover:text-[#FFB300] transition-colors"
+                      className="text-sm text-gray-400 hover:text-green-400 transition-colors duration-200 flex items-center gap-2 group"
                     >
-                      {getCategoryEmoji(cat.name)} {getLocalName(cat, language)}
+                      <span>{getCategoryEmoji(cat.name)}</span>
+                      <span className="group-hover:translate-x-0.5 transition-transform">{getLocalName(cat, language)}</span>
                     </button>
                   </li>
                 ))}
@@ -1832,17 +1884,21 @@ export default function StoreFront() {
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-5">
                 {t('contactUs', language)}
               </h3>
-              <ul className="space-y-3">
-                <li className="flex items-center gap-2 text-sm text-gray-400">
-                  <Phone className="w-4 h-4 text-[#FFB300]" />
-                  <span>+91 8100264108</span>
+              <ul className="space-y-4">
+                <li className="flex items-center gap-3 text-sm text-gray-400 group">
+                  <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                    <Phone className="w-4 h-4 text-green-400" />
+                  </div>
+                  <span className="group-hover:text-white transition-colors">+91 8100264108</span>
                 </li>
-                <li className="flex items-start gap-2 text-sm text-gray-400">
-                  <MapPin className="w-4 h-4 text-[#FFB300] mt-0.5 shrink-0" />
-                  <span>
+                <li className="flex items-start gap-3 text-sm text-gray-400 group">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <MapPin className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <span className="group-hover:text-white transition-colors">
                     {language === 'hi'
                       ? 'भारत में कहीं भी डिलीवरी'
                       : language === 'bn'
@@ -1850,20 +1906,29 @@ export default function StoreFront() {
                       : 'Delivery across India'}
                   </span>
                 </li>
-                <li className="flex items-start gap-2 text-sm text-gray-400">
-                  <CreditCard className="w-4 h-4 text-[#FFB300] mt-0.5 shrink-0" />
-                  <span>Razorpay</span>
+                <li className="flex items-start gap-3 text-sm text-gray-400 group">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <CreditCard className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <span className="group-hover:text-white transition-colors">Secure payments via Razorpay</span>
                 </li>
               </ul>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-gray-800">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <p className="text-xs text-gray-500 text-center sm:text-left">
-              © 2024 UK MART. {t('allRights', language)} {t('minOrderNote', language)}
-            </p>
+        <div className="border-t border-white/5">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <p className="text-xs text-gray-500 text-center sm:text-left">
+                © 2024 UK MART. {t('allRights', language)} {t('minOrderNote', language)}
+              </p>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>Made with</span>
+                <span className="text-red-400">♥</span>
+                <span>in India</span>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
@@ -1876,7 +1941,7 @@ export default function StoreFront() {
               <div className="flex items-center gap-2">
                 <SheetTitle className="text-lg font-bold text-gray-900">{t('yourCart', language)}</SheetTitle>
                 {isMounted && cartCount > 0 && (
-                  <Badge className="bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/10">{cartCount}</Badge>
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{cartCount}</Badge>
                 )}
               </div>
               {cart.length > 0 && (
@@ -1890,11 +1955,11 @@ export default function StoreFront() {
 
           {cart.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center min-h-0">
-              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-emerald-50 rounded-full flex items-center justify-center mb-4">
                 <ShoppingCart className="w-10 h-10 text-gray-300" />
               </div>
               <p className="text-gray-500 font-medium mb-2">{t('cartEmpty', language)}</p>
-              <Button variant="outline" className="mt-4 border-[#8D6E63] text-[#8D6E63]" onClick={() => setCartOpen(false)}>
+              <Button variant="outline" className="mt-4 border-green-300 text-green-700" onClick={() => setCartOpen(false)}>
                 {t('continueShopping', language)}
               </Button>
             </div>
@@ -1923,7 +1988,7 @@ export default function StoreFront() {
                     <Button
                       variant="link"
                       size="sm"
-                      className="text-[#8D6E63] p-0 h-auto text-xs"
+                      className="text-green-700 p-0 h-auto text-xs"
                       onClick={() => setLocationDialogOpen(true)}
                     >
                       Set location now
@@ -1932,8 +1997,8 @@ export default function StoreFront() {
                 )}
 
                 {isMounted && userLocation && minOrderRemaining > 0 && (
-                  <div className="bg-[#FFB300]/10 border border-[#FFB300]/30 rounded-lg p-2.5">
-                    <p className="text-xs text-[#8D6E63] text-center">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                    <p className="text-xs text-green-700 text-center">
                       ⚠️ {t('addedMore', language, { amount: minOrderRemaining.toFixed(0) })}
                       {effectiveMinOrder !== DEFAULT_MIN_ORDER && (
                         <span className="ml-1 text-green-600 font-medium">(Local ₹{effectiveMinOrder})</span>
@@ -1949,7 +2014,7 @@ export default function StoreFront() {
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>{t('deliveryCharge', language)}</span>
-                    <span className={deliveryCharge === 0 ? 'text-[#8D6E63] font-medium' : ''}>
+                    <span className={deliveryCharge === 0 ? 'text-green-700 font-medium' : ''}>
                       {deliveryCharge === 0 ? t('free', language) : formatPrice(deliveryCharge)}
                     </span>
                   </div>
@@ -1975,12 +2040,12 @@ export default function StoreFront() {
                   )}
                   <div className="text-[11px] text-gray-500 flex items-center justify-between">
                     <span>Minimum order</span>
-                    <span className="font-medium text-[#8D6E63]">₹{effectiveMinOrder}</span>
+                    <span className="font-medium text-green-700">₹{effectiveMinOrder}</span>
                   </div>
                 </div>
 
                 <Button
-                  className="w-full bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0"
                   size="lg"
                   disabled={cartTotal < effectiveMinOrder || !userLocation}
                   onClick={() => {
@@ -1991,7 +2056,7 @@ export default function StoreFront() {
                     }
                     if (!isAuthenticated) {
                       toast.error('Please sign in to continue to checkout');
-                      signIn('google');
+                      router.push('/login?callbackUrl=' + encodeURIComponent(window.location.pathname + window.location.search));
                       return;
                     }
                     setCartOpen(false);
@@ -2024,7 +2089,7 @@ export default function StoreFront() {
         onOpenChange={(open) => {
           if (open && !isAuthenticated) {
             toast.error('Please sign in to continue to checkout');
-            signIn('google');
+            router.push('/login?callbackUrl=' + encodeURIComponent(window.location.pathname + window.location.search));
             return;
           }
           setCheckoutOpen(open);
@@ -2147,14 +2212,14 @@ export default function StoreFront() {
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Payment Method</h3>
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedPaymentMethod('RAZORPAY')}>
-                      <input type="radio" name="payment" value="RAZORPAY" checked={selectedPaymentMethod === 'RAZORPAY'} onChange={() => setSelectedPaymentMethod('RAZORPAY')} className="w-4 h-4 text-[#8D6E63]" />
+                      <input type="radio" name="payment" value="RAZORPAY" checked={selectedPaymentMethod === 'RAZORPAY'} onChange={() => setSelectedPaymentMethod('RAZORPAY')} className="w-4 h-4 text-green-700" />
                       <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5 text-[#8D6E63]" />
+                        <CreditCard className="w-5 h-5 text-green-700" />
                         <span>Razorpay (Card, UPI, Netbanking)</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedPaymentMethod('COD')}>
-                      <input type="radio" name="payment" value="COD" checked={selectedPaymentMethod === 'COD'} onChange={() => setSelectedPaymentMethod('COD')} className="w-4 h-4 text-[#8D6E63]" />
+                      <input type="radio" name="payment" value="COD" checked={selectedPaymentMethod === 'COD'} onChange={() => setSelectedPaymentMethod('COD')} className="w-4 h-4 text-green-700" />
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-5 h-5 text-green-600" />
                         <span>Cash on Delivery (COD)</span>
@@ -2208,7 +2273,7 @@ export default function StoreFront() {
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Delivery Charge</span>
-                    <span className={deliveryCharge === 0 ? 'text-[#8D6E63] font-medium' : ''}>
+                    <span className={deliveryCharge === 0 ? 'text-green-700 font-medium' : ''}>
                       {deliveryCharge === 0 ? 'Free' : formatPrice(deliveryCharge)}
                     </span>
                   </div>
@@ -2223,7 +2288,7 @@ export default function StoreFront() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-[#8D6E63]/30 text-[#8D6E63]">
+                  <Badge variant="outline" className="border-green-300/30 text-green-700">
                     {selectedPaymentMethod === 'COD' ? 'Cash on Delivery' : 'Razorpay'}
                   </Badge>
                 </div>
@@ -2237,7 +2302,7 @@ export default function StoreFront() {
             </Button>
             {checkoutStep < 3 ? (
               <Button
-                className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0"
                 onClick={() => {
                   if (checkoutStep === 1) {
                     if (!validateDeliveryForm()) {
@@ -2254,7 +2319,7 @@ export default function StoreFront() {
               </Button>
             ) : (
               <Button
-                className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0"
                 onClick={handlePlaceOrder}
                 disabled={razorpayLoading || cartTotal < effectiveMinOrder || !userLocation}
               >
@@ -2273,13 +2338,13 @@ export default function StoreFront() {
       <Dialog open={!!orderSuccessData} onOpenChange={(open) => { if (!open) setOrderSuccessData(null); }}>
         <DialogContent className="max-w-sm w-[90vw] sm:w-full text-center p-6">
           <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 15, stiffness: 200 }}>
-            <div className="w-20 h-20 bg-[#D7CCC8] rounded-full flex items-center justify-center mx-auto mb-5">
-              <CheckCircle2 className="w-10 h-10 text-[#8D6E63]" />
+            <div className="w-20 h-20 bg-gradient-to-br from-green-100 to-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-green-500/10">
+              <CheckCircle2 className="w-10 h-10 text-green-600" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Order Placed!</h2>
             <p className="text-sm text-gray-500 mb-1">Your order has been placed successfully.</p>
             <p className="text-xs text-gray-400">Order ID: {orderSuccessData?.orderId}</p>
-            <Button className="bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white w-full mt-4" onClick={() => setOrderSuccessData(null)}>
+            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0 w-full mt-4" onClick={() => setOrderSuccessData(null)}>
               Continue Shopping
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
@@ -2384,14 +2449,14 @@ function ProductCard({
   return (
     <motion.div
       variants={{
-        hidden: { opacity: 0, y: 15 },
+        hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0 },
       }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
       className="min-w-0"
     >
       <Card
-        className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow group h-full flex flex-col cursor-pointer"
+        className="overflow-hidden border-gray-100/80 hover:border-green-200/60 hover:shadow-xl hover:shadow-green-500/[0.05] transition-all duration-500 group h-full flex flex-col cursor-pointer rounded-2xl bg-white"
         onClick={onCardClick}
       >
         <div className={`relative w-full aspect-square ${pastelColor} flex items-center justify-center overflow-hidden`}>
@@ -2399,62 +2464,75 @@ function ProductCard({
             <img
               src={product.imageUrl}
               alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
               loading="lazy"
             />
           ) : (
-            <span className="text-4xl font-bold text-gray-300">{initial}</span>
+            <span className="text-5xl font-bold text-gray-200/80">{initial}</span>
           )}
+          
+          {/* Gradient overlay at bottom of image */}
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          
           {!inStock && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <Badge variant="destructive" className="text-xs">{t('outOfStock', language)}</Badge>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center">
+              <Badge variant="destructive" className="text-xs font-semibold shadow-lg">{t('outOfStock', language)}</Badge>
             </div>
           )}
           {inStock && (
-            <Badge className="absolute top-2 left-2 bg-green-600 text-white hover:bg-green-600 text-[10px] font-semibold shadow-sm border-0">
+            <Badge className="absolute top-2.5 left-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-500 hover:to-emerald-600 text-[10px] font-bold shadow-md shadow-green-500/20 border-0 rounded-full px-2.5">
               {t('inStock', language)}
             </Badge>
           )}
           <button
             onClick={onShareClick}
-            className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-colors"
+            className="absolute top-2.5 right-2.5 p-2 bg-white/90 backdrop-blur-md rounded-full shadow-md hover:bg-white hover:scale-110 transition-all duration-200"
             aria-label="Share product"
           >
-            <Share2 className="w-4 h-4 text-gray-600" />
+            <Share2 className="w-3.5 h-3.5 text-gray-600" />
           </button>
         </div>
 
-        <CardContent className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5">
-          <h3 className="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2 leading-tight min-h-[2.5em]">
+        <CardContent className="p-3 sm:p-3.5 flex flex-col flex-1 gap-1.5">
+          <a
+            href={`/product/${product.id}`}
+            onClick={(e) => {
+              if (!e.ctrlKey && !e.metaKey && e.button === 0) {
+                e.preventDefault();
+                onCardClick();
+              }
+            }}
+            className="block text-xs sm:text-sm font-semibold text-gray-900 line-clamp-2 leading-tight min-h-[2.5em] group-hover:text-green-700 transition-colors"
+          >
             {displayName}
-          </h3>
+          </a>
 
           {displayDescription && (
-            <p className="text-[10px] sm:text-[11px] text-gray-500 line-clamp-2 leading-snug">
+            <p className="text-[10px] sm:text-[11px] text-gray-400 line-clamp-2 leading-snug">
               {displayDescription}
             </p>
           )}
 
-          <p className="text-[11px] sm:text-xs text-gray-400">
+          <p className="text-[11px] sm:text-xs text-gray-400 font-medium">
             {formatPrice(product.basePrice)} {t('per', language)} {product.baseUnit}
           </p>
 
           {isSingleFixedItem ? (
-            <div className="h-7 flex items-center px-2.5 text-xs bg-gray-50 border border-gray-200 rounded-md text-gray-600 font-medium">
+            <div className="h-7 flex items-center px-2.5 text-xs bg-gray-50 border border-gray-200/80 rounded-lg text-gray-600 font-medium">
               {availableUnits[0] || product.baseUnit}
             </div>
           ) : (
             <Select value={selectedUnit} onValueChange={onUnitChange}>
-              <SelectTrigger className="h-7 text-xs bg-gray-50 border-gray-200">
+              <SelectTrigger className="h-7 text-xs bg-gray-50/80 border-gray-200/80 rounded-lg">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl">
                 {availableUnits.map((unit) => (
-                  <SelectItem key={unit} value={unit} className="text-xs">
+                  <SelectItem key={unit} value={unit} className="text-xs rounded-lg">
                     {unit} — {formatPrice(calculatePrice(product.basePrice, product.baseUnit, unit))}
                   </SelectItem>
                 ))}
-                <SelectItem value="custom" className="text-xs font-medium text-[#8D6E63] bg-[#D7CCC8]/50">
+                <SelectItem value="custom" className="text-xs font-medium text-green-700 bg-green-50/50 rounded-lg">
                   ✏️ Custom weight...
                 </SelectItem>
               </SelectContent>
@@ -2478,7 +2556,7 @@ function ProductCard({
                       }
                     }}
                     placeholder={getCustomInputPlaceholder(product.unitType)}
-                    className="h-7 text-xs pr-12 bg-[#FFB300]/10 border-[#FFB300]/30 focus:border-[#8D6E63] focus:ring-[#8D6E63]"
+                    className="h-7 text-xs pr-12 bg-amber-50/50 border-amber-200/50 focus:border-green-400 focus:ring-green-200 rounded-lg"
                   />
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-medium pointer-events-none">
                     {getCustomInputLabel(product.unitType)}
@@ -2491,10 +2569,10 @@ function ProductCard({
                     <button
                       key={g}
                       onClick={() => onCustomWeightChange(String(g))}
-                      className={`px-1.5 py-0.5 text-[10px] rounded border transition-colors ${
+                      className={`px-1.5 py-0.5 text-[10px] rounded-md border transition-all duration-200 ${
                         customWeight === String(g)
-                          ? 'bg-[#8D6E63] text-white border-[#8D6E63]'
-                          : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-[#8D6E63]/50 hover:text-[#8D6E63]'
+                          ? 'bg-green-600 text-white border-green-600 shadow-sm'
+                          : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-green-300 hover:text-green-600'
                       }`}
                     >
                       {g >= 1000 ? `${g / 1000}kg` : `${g}g`}
@@ -2508,10 +2586,10 @@ function ProductCard({
                     <button
                       key={n}
                       onClick={() => onCustomWeightChange(String(n))}
-                      className={`px-1.5 py-0.5 text-[10px] rounded border transition-colors ${
+                      className={`px-1.5 py-0.5 text-[10px] rounded-md border transition-all duration-200 ${
                         customWeight === String(n)
-                          ? 'bg-[#8D6E63] text-white border-[#8D6E63]'
-                          : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-[#8D6E63]/50 hover:text-[#8D6E63]'
+                          ? 'bg-green-600 text-white border-green-600 shadow-sm'
+                          : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-green-300 hover:text-green-600'
                       }`}
                     >
                       {n}
@@ -2522,22 +2600,22 @@ function ProductCard({
             </div>
           )}
 
-          <p className={`font-bold ${isCustom ? 'text-base sm:text-lg text-[#FFB300]' : 'text-sm sm:text-base text-[#8D6E63]'}`}>
+          <p className={`font-bold ${isCustom ? 'text-base sm:text-lg text-amber-600' : 'text-sm sm:text-base text-gray-900'}`}>
             {displayUnit && unitPrice > 0
               ? <>{formatPrice(unitPrice)} <span className="text-[10px] sm:text-xs font-normal text-gray-400">/ {displayUnit}</span></>
               : <span className="text-[10px] sm:text-xs font-normal text-gray-400">{t('selectUnit', language)}</span>
             }
           </p>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 mt-auto pt-1">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 mt-auto pt-1.5">
             <Button
               size="sm"
-              className={`w-full sm:flex-1 h-8 text-xs font-medium transition-all order-1 sm:order-2 ${
+              className={`w-full sm:flex-1 h-8 text-xs font-semibold transition-all duration-300 order-1 sm:order-2 rounded-lg ${
                 isAdded
-                  ? 'bg-[#8D6E63]/10 text-[#8D6E63] hover:bg-[#8D6E63]/20'
+                  ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
                   : isCustom
-                    ? 'bg-[#FFB300] hover:bg-[#FFB300]/90 text-white'
-                    : 'bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-amber-500/20 border-0'
+                    : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md shadow-green-500/20 border-0'
               }`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -2552,17 +2630,17 @@ function ProductCard({
               )}
             </Button>
 
-            <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden shrink-0 self-center order-2 sm:order-1">
+            <div className="flex items-center justify-center border border-gray-200 rounded-lg overflow-hidden shrink-0 self-center order-2 sm:order-1 bg-gray-50/50">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onQtyChange(Math.max(1, selectedQty - 1));
                 }}
-                className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+                className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-green-50 hover:text-green-600 transition-colors"
               >
                 <Minus className="w-3 h-3" />
               </button>
-              <span className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-xs font-medium text-gray-700 border-x border-gray-200">
+              <span className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-xs font-bold text-gray-700 border-x border-gray-200 bg-white">
                 {selectedQty}
               </span>
               <button
@@ -2570,7 +2648,7 @@ function ProductCard({
                   e.stopPropagation();
                   onQtyChange(selectedQty + 1);
                 }}
-                className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+                className="w-8 h-7 sm:w-7 sm:h-7 flex items-center justify-center text-gray-500 hover:bg-green-50 hover:text-green-600 transition-colors"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -2732,7 +2810,7 @@ function ProductDetailModalContent({
                       {unit} — {formatPrice(calculatePrice(product.basePrice, product.baseUnit, unit))}
                     </SelectItem>
                   ))}
-                  <SelectItem value="custom" className="font-medium text-[#8D6E63] bg-[#D7CCC8]/50">
+                  <SelectItem value="custom" className="font-medium text-green-700 bg-green-50/50">
                     ✏️ Custom weight...
                   </SelectItem>
                 </SelectContent>
@@ -2761,8 +2839,8 @@ function ProductDetailModalContent({
                         onClick={() => setCustomWeight(String(g))}
                         className={`px-2 py-1 text-xs rounded border ${
                           customWeight === String(g)
-                            ? 'bg-[#8D6E63] text-white border-[#8D6E63]'
-                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#8D6E63]/50'
+                            ? 'bg-[#8D6E63] text-white border-green-300'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-300/50'
                         }`}
                       >
                         {g >= 1000 ? `${g/1000}kg` : `${g}g`}
@@ -2778,8 +2856,8 @@ function ProductDetailModalContent({
                         onClick={() => setCustomWeight(String(n))}
                         className={`px-2 py-1 text-xs rounded border ${
                           customWeight === String(n)
-                            ? 'bg-[#8D6E63] text-white border-[#8D6E63]'
-                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#8D6E63]/50'
+                            ? 'bg-[#8D6E63] text-white border-green-300'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-300/50'
                         }`}
                       >
                         {n}
@@ -2809,7 +2887,7 @@ function ProductDetailModalContent({
                 <Plus className="w-4 h-4" />
               </button>
             </div>
-            <div className="text-lg font-bold text-[#8D6E63]">
+            <div className="text-lg font-bold text-green-700">
               {displayUnit && unitPrice > 0
                 ? <>{formatPrice(unitPrice * selectedQty)} <span className="text-sm font-normal text-gray-400">/ {displayUnit}</span></>
                 : <span className="text-sm font-normal text-gray-400">{t('selectUnit', language)}</span>
@@ -2819,7 +2897,7 @@ function ProductDetailModalContent({
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
-              className="flex-1 bg-[#8D6E63] hover:bg-[#8D6E63]/90 text-white"
+              className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0"
               onClick={handleAdd}
               disabled={!inStock || (isCustom && (!customWeight || parseFloat(customWeight) <= 0))}
             >
@@ -2831,7 +2909,7 @@ function ProductDetailModalContent({
             </Button>
             <Button
               variant="outline"
-              className="border-[#8D6E63] text-[#8D6E63] hover:bg-[#D7CCC8]"
+              className="border-green-300 text-green-700 hover:bg-green-50"
               onClick={onShare}
             >
               <Share2 className="w-4 h-4 mr-2" /> Share
