@@ -303,7 +303,7 @@ export default function AdminPanel() {
   const [editStockValue, setEditStockValue] = useState<number>(0);
 
   // ── Admin Phone + Password Authentication ──
-  const [adminPhone, setAdminPhone] = useState('8100264108');
+  const [adminPhone, setAdminPhone] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
@@ -633,8 +633,9 @@ export default function AdminPanel() {
                     type="tel"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
-                    placeholder="8100264108"
+                    placeholder="Enter phone number"
                     maxLength={10}
+                    autoComplete="tel"
                     className="pl-16 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
                     required
                   />
