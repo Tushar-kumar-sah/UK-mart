@@ -70,6 +70,11 @@ import {
   IndianRupee,
   LogOut,
   Search,
+  Lock,
+  Eye,
+  EyeOff,
+  Phone,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   BarChart,
@@ -297,6 +302,43 @@ export default function AdminPanel() {
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [editStockValue, setEditStockValue] = useState<number>(0);
 
+  // ── Admin Phone + Password Authentication ──
+  const [adminPhone, setAdminPhone] = useState('8100264108');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = adminPhone.replace(/\D/g, '');
+    if (!clean || clean.length < 10) {
+      toast.error('Please enter a valid 10-digit phone number');
+      return;
+    }
+    if (!adminPassword) {
+      toast.error('Please enter your admin password');
+      return;
+    }
+    setAdminLoginLoading(true);
+    try {
+      const res = await signIn('phone-login', {
+        phone: clean,
+        password: adminPassword,
+        redirect: false,
+      });
+      if (res?.error) {
+        toast.error(res.error);
+      } else {
+        toast.success('Admin authenticated successfully');
+        router.refresh();
+      }
+    } catch (err) {
+      toast.error('An error occurred during sign in');
+    } finally {
+      setAdminLoginLoading(false);
+    }
+  };
+
   // ── Compute monthly revenue from orders ──
   const monthlyRevenue = useMemo(() => {
     if (!Array.isArray(orders) || orders.length === 0) return 0;
@@ -522,17 +564,35 @@ export default function AdminPanel() {
 
   if (isAuthenticated && !isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center text-red-600">Access Denied</CardTitle>
-            <CardDescription className="text-center">
-              You do not have permission to access the admin panel.
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
+        <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 text-white shadow-2xl backdrop-blur-xl">
+          <CardHeader className="text-center pb-4">
+            <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-400 border border-red-500/20">
+              <AlertTriangle className="size-8" />
+            </div>
+            <CardTitle className="text-2xl font-bold tracking-tight text-white">Access Restricted</CardTitle>
+            <CardDescription className="text-slate-400 text-sm">
+              Your logged-in account does not have Administrator privileges. Please sign in with an authorized admin account.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button variant="outline" onClick={() => signOut({ callbackUrl: '/' })}>
-              Sign out
+          <CardContent className="space-y-3">
+            <Button
+              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium shadow-md shadow-emerald-500/20"
+              onClick={async () => {
+                await signOut({ redirect: false });
+                router.refresh();
+              }}
+            >
+              Sign In with Admin Account
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+              onClick={() => router.push('/')}
+            >
+              <ArrowLeft className="size-4 mr-2" />
+              Return to Storefront
             </Button>
           </CardContent>
         </Card>
@@ -542,21 +602,104 @@ export default function AdminPanel() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
-            <CardDescription className="text-center">
-              Sign in with your Google account (only the admin email is allowed)
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
+        {/* Glowing background ambient lights */}
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
+
+        <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 text-white shadow-2xl backdrop-blur-xl relative z-10">
+          <CardHeader className="text-center pb-4">
+            <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-500/30">
+              <ShieldCheck className="size-8" />
+            </div>
+            <CardTitle className="text-2xl font-bold tracking-tight text-white">UK MART Admin Portal</CardTitle>
+            <CardDescription className="text-slate-400 text-sm">
+              Enter your admin phone number and password to access the store management dashboard
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button
-              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md shadow-green-500/20 border-0"
-              onClick={() => signIn('google', { callbackUrl: '/admin' })}
-            >
-              Sign in with Google
-            </Button>
+          <CardContent>
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-phone" className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Admin Phone Number
+                </Label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400 text-sm font-medium">
+                    <Phone className="size-4 mr-1 text-slate-400" />
+                    +91
+                  </div>
+                  <Input
+                    id="admin-phone"
+                    type="tel"
+                    value={adminPhone}
+                    onChange={(e) => setAdminPhone(e.target.value)}
+                    placeholder="8100264108"
+                    maxLength={10}
+                    className="pl-16 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="admin-password" className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Password
+                  </Label>
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                    <Lock className="size-4" />
+                  </div>
+                  <Input
+                    id="admin-password"
+                    type={showAdminPassword ? 'text' : 'password'}
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="pl-10 pr-10 bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    {showAdminPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={adminLoginLoading}
+                className="w-full h-11 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium shadow-lg shadow-emerald-500/25 border-0 transition-all active:scale-[0.98]"
+              >
+                {adminLoginLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin" />
+                    Authenticating...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <ShieldCheck className="size-4" />
+                    Sign In as Administrator
+                  </span>
+                )}
+              </Button>
+
+              <div className="pt-2 text-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => router.push('/')}
+                  className="text-xs text-slate-400 hover:text-white hover:bg-slate-800/50"
+                >
+                  <ArrowLeft className="size-3.5 mr-1.5" />
+                  Return to UK MART Store
+                </Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
       </div>
