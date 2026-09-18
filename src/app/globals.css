@@ -78,10 +78,14 @@
   --sidebar-ring: oklch(0.708 0 0);
 
   /* Brand colors */
-  --brand-green: #16a34a;
-  --brand-green-light: #22c55e;
-  --brand-gold: #F59E0B;
-  --brand-gold-light: #FBBF24;
+  --brand-green: #0D503C;
+  --brand-green-light: #16a34a;
+  --brand-green-bright: #22c55e;
+  --brand-gold: #C5A456;
+  --brand-gold-light: #D4B86A;
+  --brand-gold-warm: #F59E0B;
+  --brand-body: #FAFAF5;
+  --brand-footer: #0B1F17;
   --brand-brown: #8D6E63;
   --brand-brown-light: #D7CCC8;
   --brand-brown-dark: #5D4037;
@@ -208,16 +212,64 @@ html {
   animation: bounce-in 0.5s ease-out forwards;
 }
 
+/* ─── Ken Burns (subtle banner zoom) ─── */
+@keyframes ken-burns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+.animate-ken-burns {
+  animation: ken-burns 8s ease-out forwards;
+}
+
+/* ─── Fade In Up (section reveal) ─── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+/* ─── Gold Shimmer (CTA highlight) ─── */
+@keyframes gold-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.animate-gold-shimmer {
+  background: linear-gradient(110deg, transparent 20%, rgba(197, 164, 86, 0.15) 40%, rgba(197, 164, 86, 0.3) 50%, rgba(197, 164, 86, 0.15) 60%, transparent 80%);
+  background-size: 200% 100%;
+  animation: gold-shimmer 3s ease-in-out infinite;
+}
+
+/* ─── Marquee (announcement bar) ─── */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
 /* ─── Gradient Text ─── */
 .text-gradient {
-  background: linear-gradient(135deg, #16a34a 0%, #F59E0B 50%, #8D6E63 100%);
+  background: linear-gradient(135deg, #0D503C 0%, #16a34a 50%, #C5A456 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .text-gradient-gold {
-  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  background: linear-gradient(135deg, #C5A456 0%, #D4B86A 50%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-green {
+  background: linear-gradient(135deg, #0D503C 0%, #16a34a 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -225,12 +277,17 @@ html {
 
 /* ─── Glass Effect ─── */
 .glass {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
 }
 .glass-dark {
   background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.glass-green {
+  background: rgba(13, 80, 60, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -246,7 +303,7 @@ html {
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  background: linear-gradient(135deg, #22c55e, #F59E0B, #8D6E63);
+  background: linear-gradient(135deg, #0D503C, #16a34a, #C5A456);
   z-index: -1;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -261,18 +318,21 @@ html {
 }
 .card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 12px 40px -8px rgba(13, 80, 60, 0.12), 0 4px 12px -2px rgba(13, 80, 60, 0.06);
 }
 
 /* ─── Gradient Backgrounds ─── */
 .bg-brand-gradient {
-  background: linear-gradient(135deg, #16a34a, #22c55e);
+  background: linear-gradient(135deg, #0D503C, #16a34a);
 }
 .bg-gold-gradient {
-  background: linear-gradient(135deg, #F59E0B, #FBBF24);
+  background: linear-gradient(135deg, #C5A456, #D4B86A);
 }
 .bg-warm-gradient {
   background: linear-gradient(135deg, #8D6E63, #D7CCC8);
+}
+.bg-footer-gradient {
+  background: linear-gradient(180deg, #0B1F17 0%, #0D2B1F 60%, #071510 100%);
 }
 
 /* ─── Edge Fade for scroll containers ─── */
@@ -285,4 +345,42 @@ html {
 .progress-bar {
   background: linear-gradient(90deg, #22c55e, #16a34a);
   transition: width 0.5s ease;
+}
+
+/* ─── Gold Accent Underline ─── */
+.gold-underline {
+  position: relative;
+  display: inline-block;
+}
+.gold-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 40px;
+  height: 3px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #C5A456, #D4B86A);
+}
+
+/* ─── Hero Overlay ─── */
+.hero-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(11, 31, 23, 0.90) 0%,
+    rgba(13, 80, 60, 0.50) 40%,
+    rgba(13, 80, 60, 0.20) 70%,
+    transparent 100%
+  );
+}
+@media (min-width: 640px) {
+  .hero-overlay {
+    background: linear-gradient(
+      to right,
+      rgba(11, 31, 23, 0.88) 0%,
+      rgba(13, 80, 60, 0.55) 45%,
+      rgba(13, 80, 60, 0.15) 70%,
+      transparent 100%
+    );
+  }
 }
